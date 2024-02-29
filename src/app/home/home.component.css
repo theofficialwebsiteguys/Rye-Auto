@@ -14,6 +14,7 @@ body {
     width: 100%;
   }
 
+
   .quotes-btn{
     background-color: #FFF849;
     color: black;
@@ -28,6 +29,9 @@ body {
   /* Carousel base class */
   .carousel {
     margin-bottom: 4rem;
+  }
+  .carousel-inner{
+    height: 450px;
   }
   /* Since positioning the image, we need to help out the caption */
   .carousel-caption {
@@ -70,7 +74,7 @@ body {
     right: 0;
     bottom: 0;
     left: 0;
-    background: rgba(0, 0, 0, 0.6); /* Black with 50% transparency */
+    background: rgba(39, 39, 39, 0.6); /* Black with 50% transparency */
     z-index: 2; /* Ensure it's above the background image but below the content */
 }
   
