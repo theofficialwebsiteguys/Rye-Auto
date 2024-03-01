@@ -1,0 +1,46 @@
+
+  
+  /* Featurettes
+  ------------------------- */
+
+  
+  /* Thin out the marketing headings */
+  /* rtl:begin:remove */
+  .featurette-heading {
+    letter-spacing: -.05rem;
+  }
+
+  .featurette{
+    padding: 20px 100px 20px 100px
+  }
+  
+  /* rtl:end:remove */
+  
+  /* RESPONSIVE CSS
+  -------------------------------------------------- */
+  
+  @media (min-width: 40em) {
+
+    .featurette-heading {
+      font-size: 50px;
+    }
+  }
+  
+  @media (min-width: 62em) {
+    .featurette-heading {
+      margin-top: 7rem;
+    }
+  }
+  
+  @media (max-width: 1440px) {
+    .feature-img{
+        width: 450px;
+    }
+  }
+
+  @media (max-width: 1440px) {
+    .feature-img{
+        width: 450px;
+    }
+  }
+  
