@@ -128,3 +128,6 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# MetaData
+.angular/cache/17.2.1/vite/deps/_metadata.json
