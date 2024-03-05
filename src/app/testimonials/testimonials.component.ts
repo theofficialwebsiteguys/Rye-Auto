@@ -62,6 +62,54 @@ export class TestimonialsComponent {
     role: 'Software Architect',
     description: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit...',
     image: 'https://i.imgur.com/ACeArwY.jpg'
+  },
+  {
+    name: 'Bruce Hardy',
+    role: 'Software Developer',
+    description: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit...',
+    image: 'https://i.imgur.com/PKHvlRS.jpg'
+  },
+  {
+    name: 'Mark Smith',
+    role: 'Web Developer',
+    description: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit...',
+    image: 'https://i.imgur.com/w2CKRB9.jpg'
+  },
+  {
+    name: 'Veera Duncan',
+    role: 'Software Architect',
+    description: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit...',
+    image: 'https://i.imgur.com/ACeArwY.jpg'
+  },
+  {
+    name: 'John Hardy',
+    role: 'Software Developer',
+    description: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit...',
+    image: 'https://i.imgur.com/PKHvlRS.jpg'
+  },
+  {
+    name: 'greg Smith',
+    role: 'Web Developer',
+    description: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit...',
+    image: 'https://i.imgur.com/w2CKRB9.jpg'
+  },
+  {
+    name: 'jean Duncan',
+    role: 'Software Architect',
+    description: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit...',
+    image: 'https://i.imgur.com/ACeArwY.jpg'
+  },
+  {
+    name: 'jean Duncan',
+    role: 'Software Architect',
+    description: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit...',
+    image: 'https://i.imgur.com/ACeArwY.jpg'
+  },
+  {
+    name: 'jean Duncan',
+    role: 'Software Architect',
+    description: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit...',
+    image: 'https://i.imgur.com/ACeArwY.jpg'
   }
   ];
 
