@@ -1,105 +1,139 @@
-/* Featurettes
-  ------------------------- */
-
-
-/* Thin out the marketing headings */
-/* rtl:begin:remove */
-.featurette-heading {
-  letter-spacing: -.05rem;
+*,
+*::after,
+*::before {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
 }
 
+img {
+  display: block;
+  max-width: 100%;
+}
 
-
-.row {
+main {
   display: flex;
-  flex-direction: row;
-  flex-wrap: nowrap;
   justify-content: center;
+  margin: 50px;
+  align-items: center;
+  padding: 25px;
 }
 
+.main2 {
+  flex-direction: row-reverse;
+}
+
+.container,
+.container2,
+.container3 {
+  display: grid;
+  place-content: center;
+  position: relative;
+  overflow: hidden;
+  border-radius: 1rem;
+  --position: 50%;
+  max-width: 600px;
+  /* Adjust this value as needed */
+}
+
+.image-container,
+.image-container2,
+.image-container3 {
+  max-width: 600px;
+  /* Adjust this value as needed */
+  min-width: 600px;
+  /* Adjust this value as needed */
+  max-height: 90vh;
+  aspect-ratio: 1/1;
+}
+
+.slider-image,
+.slider-image2,
+.slider-image3 {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: left;
+}
+
+.image-before,
+.image-before2,
+.image-before3 {
+  position: absolute;
+  inset: 0;
+  width: var(--position);
+  filter: grayscale(100%)
+}
+
+.slider,
+.slider2,
+.slider3 {
+  position: absolute;
+  inset: 0;
+  cursor: pointer;
+  opacity: 0;
+  /* for Firefox */
+  width: 100%;
+  height: 100%;
+}
+
+.slider:focus-visible~.slider-button,
+.slider2:focus-visible~.slider-button2,
+.slider3:focus-visible~.slider-button3 {
+  outline: 5px solid black;
+  outline-offset: 3px;
+}
+
+.slider-line,
+.slider-line2,
+.slider-line3 {
+  position: absolute;
+  inset: 0;
+  width: .2rem;
+  height: 100%;
+  background-color: #fff;
+  /* z-index: 10; */
+  left: var(--position);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.slider-button,
+.slider-button2,
+.slider-button3 {
+  position: absolute;
+  background-color: #fff;
+  color: black;
+  padding: .5rem;
+  border-radius: 100vw;
+  display: grid;
+  place-items: center;
+  top: 50%;
+  left: var(--position);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  /* z-index: 100; */
+  box-shadow: 1px 1px 1px hsl(0, 50%, 2%, .5);
+}
 
 .col-md-1 {
-  width: 35% !important;
-  padding-left: 10%;
+  width: 1000px;
+  margin-left: 100px
 }
 
-.col-md-5 {
-  flex: 0 0 auto;
-  width: auto;
-  padding: 0px 2px !important;
+.col2 {
+  margin-right: 100px;
 }
 
-
-
-/* rtl:end:remove */
-
-/* RESPONSIVE CSS
-  -------------------------------------------------- */
-
-@media (min-width: 40em) {
-
-  .featurette-heading {
-    font-size: 50px;
-  }
+.b-example-divider {
+  width: 100%;
+  height: 3rem;
+  background-color: rgba(0, 0, 0, .1);
+  border: solid rgba(0, 0, 0, .15);
+  border-width: 1px 0;
+  box-shadow: inset 0 .5em 1.5em rgba(0, 0, 0, .1), inset 0 .125em .5em rgba(0, 0, 0, .15);
 }
 
-@media (min-width: 62em) {
-  .featurette-heading {
-    margin-top: 7rem;
-  }
-}
-
-@media (max-width: 1440px) {
-  .feature-img {
-    width: 450px;
-  }
-}
-
-@media (max-width: 1440px) {
-  .feature-img {
-    width: 450px;
-  }
-}
-
-/* Adjustments for smaller screen sizes */
-@media (max-width: 991px) {
-  .featurette {
-    flex-direction: column;
-    align-items: center;
-  }
-
-  .col-md-5,
-  .col-md-1 {
-    width: 100%;
-    padding: 0;
-    text-align: center;
-  }
-
-  .feature-img {
-    width: 100%;
-    margin-bottom: 20px;
-  }
-}
-
-/* Adjustments for even smaller screen sizes */
-@media (max-width: 767px) {
-  .featurette-heading {
-    font-size: 24px;
-  }
-}
-
-.img-container {
-  position: relative;
-  width: 550px;
-  height: auto;
-}
-
-.img-container img {
-  position: absolute;
-  top: 0;
-  left: 0;
-}
-
-.top {
-  overflow: hidden;
+hr {
+  width: 75%;
 }
