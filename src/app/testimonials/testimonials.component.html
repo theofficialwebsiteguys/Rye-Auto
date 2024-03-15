@@ -14,12 +14,11 @@
                                     </div>
                                     <div class="user-content">
                                         <h5 class="mb-0">{{ user.name }}</h5>
-                                        <span>{{ user.role }}</span>
                                         <p>{{ user.description }}</p>
                                     </div>
                                     <div class="ratings">
-                                        <i class="fa fa-star" *ngFor="let star of [1, 2, 3, 4, 5]"></i>
-                                    </div>
+                                        <i class="fa fa-star" *ngFor="let star of [].constructor(user.rating); let i = index"></i>
+                                      </div>
                                 </div>
                             </div>
                         </div>

@@ -54,17 +54,17 @@
 }
 
 .carousel-item:nth-child(1) {
-  background-image: url('../../assets/AVIF/hero-img-1.avif');
+  background-image: url('../../assets/gallery/pic1.jpg');
   height: 100%;
 }
 
 .carousel-item:nth-child(2) {
-  background-image: url('../../assets/AVIF/hero-img-1.avif');
+  background-image: url('../../assets/gallery/pic3.jpg');
   height: 100%;
 }
 
 .carousel-item:nth-child(3) {
-  background-image: url('../../assets/AVIF/hero-img-1.avif');
+  background-image: url('../../assets/gallery/pic2.jpg');
   height: 100%;
 }
 
