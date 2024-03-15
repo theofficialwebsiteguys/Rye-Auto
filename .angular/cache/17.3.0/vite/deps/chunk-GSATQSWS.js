@@ -3694,67 +3694,175 @@ function createInputSignal(initialValue, options) {
   }
   return inputValueFn;
 }
-var EventEmitter_ = class extends Subject {
-  constructor(isAsync = false) {
-    super();
-    this.__isAsync = isAsync;
-  }
-  emit(value) {
-    super.next(value);
-  }
-  subscribe(observerOrNext, error, complete) {
-    let nextFn = observerOrNext;
-    let errorFn = error || (() => null);
-    let completeFn = complete;
-    if (observerOrNext && typeof observerOrNext === "object") {
-      const observer = observerOrNext;
-      nextFn = observer.next?.bind(observer);
-      errorFn = observer.error?.bind(observer);
-      completeFn = observer.complete?.bind(observer);
-    }
-    if (this.__isAsync) {
-      errorFn = _wrapInTimeout(errorFn);
-      if (nextFn) {
-        nextFn = _wrapInTimeout(nextFn);
+function noSideEffects(fn) {
+  return { toString: fn }.toString();
+}
+var ANNOTATIONS = "__annotations__";
+var PARAMETERS = "__parameters__";
+var PROP_METADATA = "__prop__metadata__";
+function makeDecorator(name, props, parentClass, additionalProcessing, typeFn) {
+  return noSideEffects(() => {
+    const metaCtor = makeMetadataCtor(props);
+    function DecoratorFactory(...args) {
+      if (this instanceof DecoratorFactory) {
+        metaCtor.call(this, ...args);
+        return this;
       }
-      if (completeFn) {
-        completeFn = _wrapInTimeout(completeFn);
+      const annotationInstance = new DecoratorFactory(...args);
+      return function TypeDecorator(cls) {
+        if (typeFn)
+          typeFn(cls, ...args);
+        const annotations = cls.hasOwnProperty(ANNOTATIONS) ? cls[ANNOTATIONS] : Object.defineProperty(cls, ANNOTATIONS, { value: [] })[ANNOTATIONS];
+        annotations.push(annotationInstance);
+        if (additionalProcessing)
+          additionalProcessing(cls);
+        return cls;
+      };
+    }
+    if (parentClass) {
+      DecoratorFactory.prototype = Object.create(parentClass.prototype);
+    }
+    DecoratorFactory.prototype.ngMetadataName = name;
+    DecoratorFactory.annotationCls = DecoratorFactory;
+    return DecoratorFactory;
+  });
+}
+function makeMetadataCtor(props) {
+  return function ctor(...args) {
+    if (props) {
+      const values = props(...args);
+      for (const propName in values) {
+        this[propName] = values[propName];
       }
     }
-    const sink = super.subscribe({ next: nextFn, error: errorFn, complete: completeFn });
-    if (observerOrNext instanceof Subscription) {
-      observerOrNext.add(sink);
-    }
-    return sink;
-  }
-};
-function _wrapInTimeout(fn) {
-  return (value) => {
-    setTimeout(fn, void 0, value);
   };
 }
-var EventEmitter = EventEmitter_;
-function output(opts) {
-  return new EventEmitter();
+function makeParamDecorator(name, props, parentClass) {
+  return noSideEffects(() => {
+    const metaCtor = makeMetadataCtor(props);
+    function ParamDecoratorFactory(...args) {
+      if (this instanceof ParamDecoratorFactory) {
+        metaCtor.apply(this, args);
+        return this;
+      }
+      const annotationInstance = new ParamDecoratorFactory(...args);
+      ParamDecorator.annotation = annotationInstance;
+      return ParamDecorator;
+      function ParamDecorator(cls, unusedKey, index) {
+        const parameters = cls.hasOwnProperty(PARAMETERS) ? cls[PARAMETERS] : Object.defineProperty(cls, PARAMETERS, { value: [] })[PARAMETERS];
+        while (parameters.length <= index) {
+          parameters.push(null);
+        }
+        (parameters[index] = parameters[index] || []).push(annotationInstance);
+        return cls;
+      }
+    }
+    if (parentClass) {
+      ParamDecoratorFactory.prototype = Object.create(parentClass.prototype);
+    }
+    ParamDecoratorFactory.prototype.ngMetadataName = name;
+    ParamDecoratorFactory.annotationCls = ParamDecoratorFactory;
+    return ParamDecoratorFactory;
+  });
 }
-function inputFunction(initialValue, opts) {
-  return createInputSignal(initialValue, opts);
+function makePropDecorator(name, props, parentClass, additionalProcessing) {
+  return noSideEffects(() => {
+    const metaCtor = makeMetadataCtor(props);
+    function PropDecoratorFactory(...args) {
+      if (this instanceof PropDecoratorFactory) {
+        metaCtor.apply(this, args);
+        return this;
+      }
+      const decoratorInstance = new PropDecoratorFactory(...args);
+      function PropDecorator(target, name2) {
+        if (target === void 0) {
+          throw new Error("Standard Angular field decorators are not supported in JIT mode.");
+        }
+        const constructor = target.constructor;
+        const meta = constructor.hasOwnProperty(PROP_METADATA) ? constructor[PROP_METADATA] : Object.defineProperty(constructor, PROP_METADATA, { value: {} })[PROP_METADATA];
+        meta[name2] = meta.hasOwnProperty(name2) && meta[name2] || [];
+        meta[name2].unshift(decoratorInstance);
+        if (additionalProcessing)
+          additionalProcessing(target, name2, ...args);
+      }
+      return PropDecorator;
+    }
+    if (parentClass) {
+      PropDecoratorFactory.prototype = Object.create(parentClass.prototype);
+    }
+    PropDecoratorFactory.prototype.ngMetadataName = name;
+    PropDecoratorFactory.annotationCls = PropDecoratorFactory;
+    return PropDecoratorFactory;
+  });
 }
-function inputRequiredFunction(opts) {
-  return createInputSignal(REQUIRED_UNSET_VALUE, opts);
+var _global = globalThis;
+function ngDevModeResetPerfCounters() {
+  const locationString = typeof location !== "undefined" ? location.toString() : "";
+  const newCounters = {
+    namedConstructors: locationString.indexOf("ngDevMode=namedConstructors") != -1,
+    firstCreatePass: 0,
+    tNode: 0,
+    tView: 0,
+    rendererCreateTextNode: 0,
+    rendererSetText: 0,
+    rendererCreateElement: 0,
+    rendererAddEventListener: 0,
+    rendererSetAttribute: 0,
+    rendererRemoveAttribute: 0,
+    rendererSetProperty: 0,
+    rendererSetClassName: 0,
+    rendererAddClass: 0,
+    rendererRemoveClass: 0,
+    rendererSetStyle: 0,
+    rendererRemoveStyle: 0,
+    rendererDestroy: 0,
+    rendererDestroyNode: 0,
+    rendererMoveNode: 0,
+    rendererRemoveNode: 0,
+    rendererAppendChild: 0,
+    rendererInsertBefore: 0,
+    rendererCreateComment: 0,
+    hydratedNodes: 0,
+    hydratedComponents: 0,
+    dehydratedViewsRemoved: 0,
+    dehydratedViewsCleanupRuns: 0,
+    componentsSkippedHydration: 0
+  };
+  const allowNgDevModeTrue = locationString.indexOf("ngDevMode=false") === -1;
+  if (!allowNgDevModeTrue) {
+    _global["ngDevMode"] = false;
+  } else {
+    if (typeof _global["ngDevMode"] !== "object") {
+      _global["ngDevMode"] = {};
+    }
+    Object.assign(_global["ngDevMode"], newCounters);
+  }
+  return newCounters;
 }
-var input = (() => {
-  inputFunction.required = inputRequiredFunction;
-  return inputFunction;
-})();
-var InjectFlags;
-(function(InjectFlags2) {
-  InjectFlags2[InjectFlags2["Default"] = 0] = "Default";
-  InjectFlags2[InjectFlags2["Host"] = 1] = "Host";
-  InjectFlags2[InjectFlags2["Self"] = 2] = "Self";
-  InjectFlags2[InjectFlags2["SkipSelf"] = 4] = "SkipSelf";
-  InjectFlags2[InjectFlags2["Optional"] = 8] = "Optional";
-})(InjectFlags || (InjectFlags = {}));
+function initNgDevMode() {
+  if (typeof ngDevMode === "undefined" || ngDevMode) {
+    if (typeof ngDevMode !== "object" || Object.keys(ngDevMode).length === 0) {
+      ngDevModeResetPerfCounters();
+    }
+    return typeof ngDevMode !== "undefined" && !!ngDevMode;
+  }
+  return false;
+}
+function getClosureSafeProperty(objWithPropertyToExtract) {
+  for (let key in objWithPropertyToExtract) {
+    if (objWithPropertyToExtract[key] === getClosureSafeProperty) {
+      return key;
+    }
+  }
+  throw Error("Could not find renamed property on target object.");
+}
+function fillProperties(target, source) {
+  for (const key in source) {
+    if (source.hasOwnProperty(key) && !target.hasOwnProperty(key)) {
+      target[key] = source[key];
+    }
+  }
+}
 function stringify(token) {
   if (typeof token === "string") {
     return token;
@@ -3788,6 +3896,20 @@ function truncateMiddle(str, maxLength = 100) {
     return str.substring(0, 1) + "...";
   const halfLimit = Math.round(maxLength / 2);
   return str.substring(0, halfLimit) + "..." + str.substring(str.length - halfLimit);
+}
+var __forward_ref__ = getClosureSafeProperty({ __forward_ref__: getClosureSafeProperty });
+function forwardRef(forwardRefFn) {
+  forwardRefFn.__forward_ref__ = forwardRef;
+  forwardRefFn.toString = function() {
+    return stringify(this());
+  };
+  return forwardRefFn;
+}
+function resolveForwardRef(type) {
+  return isForwardRef(type) ? type() : type;
+}
+function isForwardRef(fn) {
+  return typeof fn === "function" && fn.hasOwnProperty(__forward_ref__) && fn.__forward_ref__ === forwardRef;
 }
 function assertNumber(actual, msg) {
   if (!(typeof actual === "number")) {
@@ -3879,6 +4001,540 @@ function assertOneOf(value, ...validValues) {
     return true;
   throwError2(`Expected value to be one of ${JSON.stringify(validValues)} but was ${JSON.stringify(value)}.`);
 }
+function assertNotReactive(fn) {
+  if (getActiveConsumer() !== null) {
+    throwError2(`${fn}() should never be called in a reactive context.`);
+  }
+}
+function ɵɵdefineInjectable(opts) {
+  return {
+    token: opts.token,
+    providedIn: opts.providedIn || null,
+    factory: opts.factory,
+    value: void 0
+  };
+}
+var defineInjectable = ɵɵdefineInjectable;
+function ɵɵdefineInjector(options) {
+  return { providers: options.providers || [], imports: options.imports || [] };
+}
+function getInjectableDef(type) {
+  return getOwnDefinition(type, NG_PROV_DEF) || getOwnDefinition(type, NG_INJECTABLE_DEF);
+}
+function isInjectable(type) {
+  return getInjectableDef(type) !== null;
+}
+function getOwnDefinition(type, field) {
+  return type.hasOwnProperty(field) ? type[field] : null;
+}
+function getInheritedInjectableDef(type) {
+  const def = type && (type[NG_PROV_DEF] || type[NG_INJECTABLE_DEF]);
+  if (def) {
+    ngDevMode && console.warn(`DEPRECATED: DI is instantiating a token "${type.name}" that inherits its @Injectable decorator but does not provide one itself.
+This will become an error in a future version of Angular. Please add @Injectable() to the "${type.name}" class.`);
+    return def;
+  } else {
+    return null;
+  }
+}
+function getInjectorDef(type) {
+  return type && (type.hasOwnProperty(NG_INJ_DEF) || type.hasOwnProperty(NG_INJECTOR_DEF)) ? type[NG_INJ_DEF] : null;
+}
+var NG_PROV_DEF = getClosureSafeProperty({ ɵprov: getClosureSafeProperty });
+var NG_INJ_DEF = getClosureSafeProperty({ ɵinj: getClosureSafeProperty });
+var NG_INJECTABLE_DEF = getClosureSafeProperty({ ngInjectableDef: getClosureSafeProperty });
+var NG_INJECTOR_DEF = getClosureSafeProperty({ ngInjectorDef: getClosureSafeProperty });
+var InjectionToken = class {
+  /**
+   * @param _desc   Description for the token,
+   *                used only for debugging purposes,
+   *                it should but does not need to be unique
+   * @param options Options for the token's usage, as described above
+   */
+  constructor(_desc, options) {
+    this._desc = _desc;
+    this.ngMetadataName = "InjectionToken";
+    this.ɵprov = void 0;
+    if (typeof options == "number") {
+      (typeof ngDevMode === "undefined" || ngDevMode) && assertLessThan(options, 0, "Only negative numbers are supported here");
+      this.__NG_ELEMENT_ID__ = options;
+    } else if (options !== void 0) {
+      this.ɵprov = ɵɵdefineInjectable({
+        token: this,
+        providedIn: options.providedIn || "root",
+        factory: options.factory
+      });
+    }
+  }
+  /**
+   * @internal
+   */
+  get multi() {
+    return this;
+  }
+  toString() {
+    return `InjectionToken ${this._desc}`;
+  }
+};
+var _injectorProfilerContext;
+function getInjectorProfilerContext() {
+  !ngDevMode && throwError2("getInjectorProfilerContext should never be called in production mode");
+  return _injectorProfilerContext;
+}
+function setInjectorProfilerContext(context2) {
+  !ngDevMode && throwError2("setInjectorProfilerContext should never be called in production mode");
+  const previous = _injectorProfilerContext;
+  _injectorProfilerContext = context2;
+  return previous;
+}
+var injectorProfilerCallback = null;
+var setInjectorProfiler = (injectorProfiler2) => {
+  !ngDevMode && throwError2("setInjectorProfiler should never be called in production mode");
+  injectorProfilerCallback = injectorProfiler2;
+};
+function injectorProfiler(event) {
+  !ngDevMode && throwError2("Injector profiler should never be called in production mode");
+  if (injectorProfilerCallback != null) {
+    injectorProfilerCallback(event);
+  }
+}
+function emitProviderConfiguredEvent(eventProvider, isViewProvider = false) {
+  !ngDevMode && throwError2("Injector profiler should never be called in production mode");
+  let token;
+  if (typeof eventProvider === "function") {
+    token = eventProvider;
+  } else if (eventProvider instanceof InjectionToken) {
+    token = eventProvider;
+  } else {
+    token = resolveForwardRef(eventProvider.provide);
+  }
+  let provider = eventProvider;
+  if (eventProvider instanceof InjectionToken) {
+    provider = eventProvider.ɵprov || eventProvider;
+  }
+  injectorProfiler({
+    type: 2,
+    context: getInjectorProfilerContext(),
+    providerRecord: { token, provider, isViewProvider }
+  });
+}
+function emitInstanceCreatedByInjectorEvent(instance) {
+  !ngDevMode && throwError2("Injector profiler should never be called in production mode");
+  injectorProfiler({
+    type: 1,
+    context: getInjectorProfilerContext(),
+    instance: { value: instance }
+  });
+}
+function emitInjectEvent(token, value, flags) {
+  !ngDevMode && throwError2("Injector profiler should never be called in production mode");
+  injectorProfiler({
+    type: 0,
+    context: getInjectorProfilerContext(),
+    service: { token, value, flags }
+  });
+}
+function runInInjectorProfilerContext(injector, token, callback) {
+  !ngDevMode && throwError2("runInInjectorProfilerContext should never be called in production mode");
+  const prevInjectContext = setInjectorProfilerContext({ injector, token });
+  try {
+    callback();
+  } finally {
+    setInjectorProfilerContext(prevInjectContext);
+  }
+}
+function isEnvironmentProviders(value) {
+  return value && !!value.ɵproviders;
+}
+var NG_COMP_DEF = getClosureSafeProperty({ ɵcmp: getClosureSafeProperty });
+var NG_DIR_DEF = getClosureSafeProperty({ ɵdir: getClosureSafeProperty });
+var NG_PIPE_DEF = getClosureSafeProperty({ ɵpipe: getClosureSafeProperty });
+var NG_MOD_DEF = getClosureSafeProperty({ ɵmod: getClosureSafeProperty });
+var NG_FACTORY_DEF = getClosureSafeProperty({ ɵfac: getClosureSafeProperty });
+var NG_ELEMENT_ID = getClosureSafeProperty({ __NG_ELEMENT_ID__: getClosureSafeProperty });
+var NG_ENV_ID = getClosureSafeProperty({ __NG_ENV_ID__: getClosureSafeProperty });
+function renderStringify(value) {
+  if (typeof value === "string")
+    return value;
+  if (value == null)
+    return "";
+  return String(value);
+}
+function stringifyForError(value) {
+  if (typeof value === "function")
+    return value.name || value.toString();
+  if (typeof value === "object" && value != null && typeof value.type === "function") {
+    return value.type.name || value.type.toString();
+  }
+  return renderStringify(value);
+}
+function debugStringifyTypeForError(type) {
+  let componentDef = type[NG_COMP_DEF] || null;
+  if (componentDef !== null && componentDef.debugInfo) {
+    return stringifyTypeFromDebugInfo(componentDef.debugInfo);
+  }
+  return stringifyForError(type);
+}
+function stringifyTypeFromDebugInfo(debugInfo) {
+  if (!debugInfo.filePath || !debugInfo.lineNumber) {
+    return debugInfo.className;
+  } else {
+    return `${debugInfo.className} (at ${debugInfo.filePath}:${debugInfo.lineNumber})`;
+  }
+}
+function throwCyclicDependencyError(token, path) {
+  const depPath = path ? `. Dependency path: ${path.join(" > ")} > ${token}` : "";
+  throw new RuntimeError(-200, ngDevMode ? `Circular dependency in DI detected for ${token}${depPath}` : token);
+}
+function throwMixedMultiProviderError() {
+  throw new Error(`Cannot mix multi providers and regular providers`);
+}
+function throwInvalidProviderError(ngModuleType, providers, provider) {
+  if (ngModuleType && providers) {
+    const providerDetail = providers.map((v) => v == provider ? "?" + provider + "?" : "...");
+    throw new Error(`Invalid provider for the NgModule '${stringify(ngModuleType)}' - only instances of Provider and Type are allowed, got: [${providerDetail.join(", ")}]`);
+  } else if (isEnvironmentProviders(provider)) {
+    if (provider.ɵfromNgModule) {
+      throw new RuntimeError(207, `Invalid providers from 'importProvidersFrom' present in a non-environment injector. 'importProvidersFrom' can't be used for component providers.`);
+    } else {
+      throw new RuntimeError(207, `Invalid providers present in a non-environment injector. 'EnvironmentProviders' can't be used for component providers.`);
+    }
+  } else {
+    throw new Error("Invalid provider");
+  }
+}
+function throwProviderNotFoundError(token, injectorName) {
+  const errorMessage = ngDevMode && `No provider for ${stringifyForError(token)} found${injectorName ? ` in ${injectorName}` : ""}`;
+  throw new RuntimeError(-201, errorMessage);
+}
+var InjectFlags;
+(function(InjectFlags2) {
+  InjectFlags2[InjectFlags2["Default"] = 0] = "Default";
+  InjectFlags2[InjectFlags2["Host"] = 1] = "Host";
+  InjectFlags2[InjectFlags2["Self"] = 2] = "Self";
+  InjectFlags2[InjectFlags2["SkipSelf"] = 4] = "SkipSelf";
+  InjectFlags2[InjectFlags2["Optional"] = 8] = "Optional";
+})(InjectFlags || (InjectFlags = {}));
+var _injectImplementation;
+function getInjectImplementation() {
+  return _injectImplementation;
+}
+function setInjectImplementation(impl) {
+  const previous = _injectImplementation;
+  _injectImplementation = impl;
+  return previous;
+}
+function injectRootLimpMode(token, notFoundValue, flags) {
+  const injectableDef = getInjectableDef(token);
+  if (injectableDef && injectableDef.providedIn == "root") {
+    return injectableDef.value === void 0 ? injectableDef.value = injectableDef.factory() : injectableDef.value;
+  }
+  if (flags & InjectFlags.Optional)
+    return null;
+  if (notFoundValue !== void 0)
+    return notFoundValue;
+  throwProviderNotFoundError(token, "Injector");
+}
+function assertInjectImplementationNotEqual(fn) {
+  ngDevMode && assertNotEqual(_injectImplementation, fn, "Calling ɵɵinject would cause infinite recursion");
+}
+var _THROW_IF_NOT_FOUND = {};
+var THROW_IF_NOT_FOUND = _THROW_IF_NOT_FOUND;
+var DI_DECORATOR_FLAG = "__NG_DI_FLAG__";
+var NG_TEMP_TOKEN_PATH = "ngTempTokenPath";
+var NG_TOKEN_PATH = "ngTokenPath";
+var NEW_LINE = /\n/gm;
+var NO_NEW_LINE = "ɵ";
+var SOURCE = "__source";
+var _currentInjector = void 0;
+function getCurrentInjector() {
+  return _currentInjector;
+}
+function setCurrentInjector(injector) {
+  const former = _currentInjector;
+  _currentInjector = injector;
+  return former;
+}
+function injectInjectorOnly(token, flags = InjectFlags.Default) {
+  if (_currentInjector === void 0) {
+    throw new RuntimeError(-203, ngDevMode && `inject() must be called from an injection context such as a constructor, a factory function, a field initializer, or a function used with \`runInInjectionContext\`.`);
+  } else if (_currentInjector === null) {
+    return injectRootLimpMode(token, void 0, flags);
+  } else {
+    const value = _currentInjector.get(token, flags & InjectFlags.Optional ? null : void 0, flags);
+    ngDevMode && emitInjectEvent(token, value, flags);
+    return value;
+  }
+}
+function ɵɵinject(token, flags = InjectFlags.Default) {
+  return (getInjectImplementation() || injectInjectorOnly)(resolveForwardRef(token), flags);
+}
+function ɵɵinvalidFactoryDep(index) {
+  throw new RuntimeError(202, ngDevMode && `This constructor is not compatible with Angular Dependency Injection because its dependency at index ${index} of the parameter list is invalid.
+This can happen if the dependency type is a primitive like a string or if an ancestor of this class is missing an Angular decorator.
+
+Please check that 1) the type for the parameter at index ${index} is correct and 2) the correct Angular decorators are defined for this class and its ancestors.`);
+}
+function inject(token, flags = InjectFlags.Default) {
+  return ɵɵinject(token, convertToBitFlags(flags));
+}
+function convertToBitFlags(flags) {
+  if (typeof flags === "undefined" || typeof flags === "number") {
+    return flags;
+  }
+  return 0 | // comment to force a line break in the formatter
+  (flags.optional && 8) | (flags.host && 1) | (flags.self && 2) | (flags.skipSelf && 4);
+}
+function injectArgs(types) {
+  const args = [];
+  for (let i = 0; i < types.length; i++) {
+    const arg = resolveForwardRef(types[i]);
+    if (Array.isArray(arg)) {
+      if (arg.length === 0) {
+        throw new RuntimeError(900, ngDevMode && "Arguments array must have arguments.");
+      }
+      let type = void 0;
+      let flags = InjectFlags.Default;
+      for (let j = 0; j < arg.length; j++) {
+        const meta = arg[j];
+        const flag = getInjectFlag(meta);
+        if (typeof flag === "number") {
+          if (flag === -1) {
+            type = meta.token;
+          } else {
+            flags |= flag;
+          }
+        } else {
+          type = meta;
+        }
+      }
+      args.push(ɵɵinject(type, flags));
+    } else {
+      args.push(ɵɵinject(arg));
+    }
+  }
+  return args;
+}
+function attachInjectFlag(decorator, flag) {
+  decorator[DI_DECORATOR_FLAG] = flag;
+  decorator.prototype[DI_DECORATOR_FLAG] = flag;
+  return decorator;
+}
+function getInjectFlag(token) {
+  return token[DI_DECORATOR_FLAG];
+}
+function catchInjectorError(e, token, injectorErrorName, source) {
+  const tokenPath = e[NG_TEMP_TOKEN_PATH];
+  if (token[SOURCE]) {
+    tokenPath.unshift(token[SOURCE]);
+  }
+  e.message = formatError("\n" + e.message, tokenPath, injectorErrorName, source);
+  e[NG_TOKEN_PATH] = tokenPath;
+  e[NG_TEMP_TOKEN_PATH] = null;
+  throw e;
+}
+function formatError(text, obj, injectorErrorName, source = null) {
+  text = text && text.charAt(0) === "\n" && text.charAt(1) == NO_NEW_LINE ? text.slice(2) : text;
+  let context2 = stringify(obj);
+  if (Array.isArray(obj)) {
+    context2 = obj.map(stringify).join(" -> ");
+  } else if (typeof obj === "object") {
+    let parts = [];
+    for (let key in obj) {
+      if (obj.hasOwnProperty(key)) {
+        let value = obj[key];
+        parts.push(key + ":" + (typeof value === "string" ? JSON.stringify(value) : stringify(value)));
+      }
+    }
+    context2 = `{${parts.join(", ")}}`;
+  }
+  return `${injectorErrorName}${source ? "(" + source + ")" : ""}[${context2}]: ${text.replace(NEW_LINE, "\n  ")}`;
+}
+var Inject = attachInjectFlag(
+  // Disable tslint because `DecoratorFlags` is a const enum which gets inlined.
+  // tslint:disable-next-line: no-toplevel-property-access
+  makeParamDecorator("Inject", (token) => ({ token })),
+  -1
+  /* DecoratorFlags.Inject */
+);
+var Optional = (
+  // Disable tslint because `InternalInjectFlags` is a const enum which gets inlined.
+  // tslint:disable-next-line: no-toplevel-property-access
+  attachInjectFlag(
+    makeParamDecorator("Optional"),
+    8
+    /* InternalInjectFlags.Optional */
+  )
+);
+var Self = (
+  // Disable tslint because `InternalInjectFlags` is a const enum which gets inlined.
+  // tslint:disable-next-line: no-toplevel-property-access
+  attachInjectFlag(
+    makeParamDecorator("Self"),
+    2
+    /* InternalInjectFlags.Self */
+  )
+);
+var SkipSelf = (
+  // Disable tslint because `InternalInjectFlags` is a const enum which gets inlined.
+  // tslint:disable-next-line: no-toplevel-property-access
+  attachInjectFlag(
+    makeParamDecorator("SkipSelf"),
+    4
+    /* InternalInjectFlags.SkipSelf */
+  )
+);
+var Host = (
+  // Disable tslint because `InternalInjectFlags` is a const enum which gets inlined.
+  // tslint:disable-next-line: no-toplevel-property-access
+  attachInjectFlag(
+    makeParamDecorator("Host"),
+    1
+    /* InternalInjectFlags.Host */
+  )
+);
+function getFactoryDef(type, throwNotFound) {
+  const hasFactoryDef = type.hasOwnProperty(NG_FACTORY_DEF);
+  if (!hasFactoryDef && throwNotFound === true && ngDevMode) {
+    throw new Error(`Type ${stringify(type)} does not have 'ɵfac' property.`);
+  }
+  return hasFactoryDef ? type[NG_FACTORY_DEF] : null;
+}
+function arrayEquals(a, b, identityAccessor) {
+  if (a.length !== b.length)
+    return false;
+  for (let i = 0; i < a.length; i++) {
+    let valueA = a[i];
+    let valueB = b[i];
+    if (identityAccessor) {
+      valueA = identityAccessor(valueA);
+      valueB = identityAccessor(valueB);
+    }
+    if (valueB !== valueA) {
+      return false;
+    }
+  }
+  return true;
+}
+function flatten(list) {
+  return list.flat(Number.POSITIVE_INFINITY);
+}
+function deepForEach(input2, fn) {
+  input2.forEach((value) => Array.isArray(value) ? deepForEach(value, fn) : fn(value));
+}
+function addToArray(arr, index, value) {
+  if (index >= arr.length) {
+    arr.push(value);
+  } else {
+    arr.splice(index, 0, value);
+  }
+}
+function removeFromArray(arr, index) {
+  if (index >= arr.length - 1) {
+    return arr.pop();
+  } else {
+    return arr.splice(index, 1)[0];
+  }
+}
+function newArray(size, value) {
+  const list = [];
+  for (let i = 0; i < size; i++) {
+    list.push(value);
+  }
+  return list;
+}
+function arraySplice(array, index, count2) {
+  const length = array.length - count2;
+  while (index < length) {
+    array[index] = array[index + count2];
+    index++;
+  }
+  while (count2--) {
+    array.pop();
+  }
+}
+function arrayInsert2(array, index, value1, value2) {
+  ngDevMode && assertLessThanOrEqual(index, array.length, "Can't insert past array end.");
+  let end = array.length;
+  if (end == index) {
+    array.push(value1, value2);
+  } else if (end === 1) {
+    array.push(value2, array[0]);
+    array[0] = value1;
+  } else {
+    end--;
+    array.push(array[end - 1], array[end]);
+    while (end > index) {
+      const previousEnd = end - 2;
+      array[end] = array[previousEnd];
+      end--;
+    }
+    array[index] = value1;
+    array[index + 1] = value2;
+  }
+}
+function keyValueArraySet(keyValueArray, key, value) {
+  let index = keyValueArrayIndexOf(keyValueArray, key);
+  if (index >= 0) {
+    keyValueArray[index | 1] = value;
+  } else {
+    index = ~index;
+    arrayInsert2(keyValueArray, index, key, value);
+  }
+  return index;
+}
+function keyValueArrayGet(keyValueArray, key) {
+  const index = keyValueArrayIndexOf(keyValueArray, key);
+  if (index >= 0) {
+    return keyValueArray[index | 1];
+  }
+  return void 0;
+}
+function keyValueArrayIndexOf(keyValueArray, key) {
+  return _arrayIndexOfSorted(keyValueArray, key, 1);
+}
+function _arrayIndexOfSorted(array, value, shift) {
+  ngDevMode && assertEqual(Array.isArray(array), true, "Expecting an array");
+  let start = 0;
+  let end = array.length >> shift;
+  while (end !== start) {
+    const middle = start + (end - start >> 1);
+    const current = array[middle << shift];
+    if (value === current) {
+      return middle << shift;
+    } else if (current > value) {
+      end = middle;
+    } else {
+      start = middle + 1;
+    }
+  }
+  return ~(end << shift);
+}
+var EMPTY_OBJ = {};
+var EMPTY_ARRAY = [];
+if ((typeof ngDevMode === "undefined" || ngDevMode) && initNgDevMode()) {
+  Object.freeze(EMPTY_OBJ);
+  Object.freeze(EMPTY_ARRAY);
+}
+var ENVIRONMENT_INITIALIZER = new InjectionToken(ngDevMode ? "ENVIRONMENT_INITIALIZER" : "");
+var INJECTOR$1 = new InjectionToken(
+  ngDevMode ? "INJECTOR" : "",
+  // Disable tslint because this is const enum which gets inlined not top level prop access.
+  // tslint:disable-next-line: no-toplevel-property-access
+  -1
+  /* InjectorMarkers.Injector */
+);
+var INJECTOR_DEF_TYPES = new InjectionToken(ngDevMode ? "INJECTOR_DEF_TYPES" : "");
+var NullInjector = class {
+  get(token, notFoundValue = THROW_IF_NOT_FOUND) {
+    if (notFoundValue === THROW_IF_NOT_FOUND) {
+      const error = new Error(`NullInjectorError: No provider for ${stringify(token)}!`);
+      error.name = "NullInjectorError";
+      throw error;
+    }
+    return notFoundValue;
+  }
+};
 var ChangeDetectionStrategy;
 (function(ChangeDetectionStrategy2) {
   ChangeDetectionStrategy2[ChangeDetectionStrategy2["OnPush"] = 0] = "OnPush";
@@ -3890,90 +4546,6 @@ var ViewEncapsulation$1;
   ViewEncapsulation2[ViewEncapsulation2["None"] = 2] = "None";
   ViewEncapsulation2[ViewEncapsulation2["ShadowDom"] = 3] = "ShadowDom";
 })(ViewEncapsulation$1 || (ViewEncapsulation$1 = {}));
-function noSideEffects(fn) {
-  return { toString: fn }.toString();
-}
-var _global = globalThis;
-function ngDevModeResetPerfCounters() {
-  const locationString = typeof location !== "undefined" ? location.toString() : "";
-  const newCounters = {
-    namedConstructors: locationString.indexOf("ngDevMode=namedConstructors") != -1,
-    firstCreatePass: 0,
-    tNode: 0,
-    tView: 0,
-    rendererCreateTextNode: 0,
-    rendererSetText: 0,
-    rendererCreateElement: 0,
-    rendererAddEventListener: 0,
-    rendererSetAttribute: 0,
-    rendererRemoveAttribute: 0,
-    rendererSetProperty: 0,
-    rendererSetClassName: 0,
-    rendererAddClass: 0,
-    rendererRemoveClass: 0,
-    rendererSetStyle: 0,
-    rendererRemoveStyle: 0,
-    rendererDestroy: 0,
-    rendererDestroyNode: 0,
-    rendererMoveNode: 0,
-    rendererRemoveNode: 0,
-    rendererAppendChild: 0,
-    rendererInsertBefore: 0,
-    rendererCreateComment: 0,
-    hydratedNodes: 0,
-    hydratedComponents: 0,
-    dehydratedViewsRemoved: 0,
-    dehydratedViewsCleanupRuns: 0,
-    componentsSkippedHydration: 0
-  };
-  const allowNgDevModeTrue = locationString.indexOf("ngDevMode=false") === -1;
-  if (!allowNgDevModeTrue) {
-    _global["ngDevMode"] = false;
-  } else {
-    if (typeof _global["ngDevMode"] !== "object") {
-      _global["ngDevMode"] = {};
-    }
-    Object.assign(_global["ngDevMode"], newCounters);
-  }
-  return newCounters;
-}
-function initNgDevMode() {
-  if (typeof ngDevMode === "undefined" || ngDevMode) {
-    if (typeof ngDevMode !== "object" || Object.keys(ngDevMode).length === 0) {
-      ngDevModeResetPerfCounters();
-    }
-    return typeof ngDevMode !== "undefined" && !!ngDevMode;
-  }
-  return false;
-}
-var EMPTY_OBJ = {};
-var EMPTY_ARRAY = [];
-if ((typeof ngDevMode === "undefined" || ngDevMode) && initNgDevMode()) {
-  Object.freeze(EMPTY_OBJ);
-  Object.freeze(EMPTY_ARRAY);
-}
-function getClosureSafeProperty(objWithPropertyToExtract) {
-  for (let key in objWithPropertyToExtract) {
-    if (objWithPropertyToExtract[key] === getClosureSafeProperty) {
-      return key;
-    }
-  }
-  throw Error("Could not find renamed property on target object.");
-}
-function fillProperties(target, source) {
-  for (const key in source) {
-    if (source.hasOwnProperty(key) && !target.hasOwnProperty(key)) {
-      target[key] = source[key];
-    }
-  }
-}
-var NG_COMP_DEF = getClosureSafeProperty({ ɵcmp: getClosureSafeProperty });
-var NG_DIR_DEF = getClosureSafeProperty({ ɵdir: getClosureSafeProperty });
-var NG_PIPE_DEF = getClosureSafeProperty({ ɵpipe: getClosureSafeProperty });
-var NG_MOD_DEF = getClosureSafeProperty({ ɵmod: getClosureSafeProperty });
-var NG_FACTORY_DEF = getClosureSafeProperty({ ɵfac: getClosureSafeProperty });
-var NG_ELEMENT_ID = getClosureSafeProperty({ __NG_ELEMENT_ID__: getClosureSafeProperty });
-var NG_ENV_ID = getClosureSafeProperty({ __NG_ENV_ID__: getClosureSafeProperty });
 var InputFlags;
 (function(InputFlags2) {
   InputFlags2[InputFlags2["None"] = 0] = "None";
@@ -4105,27 +4677,25 @@ function mergeHostAttribute(dst, marker, key1, key2, value) {
   }
 }
 var NG_TEMPLATE_SELECTOR = "ng-template";
-function isCssClassMatching(attrs, cssClassToMatch, isProjectionMode) {
+function isCssClassMatching(tNode, attrs, cssClassToMatch, isProjectionMode) {
   ngDevMode && assertEqual(cssClassToMatch, cssClassToMatch.toLowerCase(), "Class name expected to be lowercase.");
   let i = 0;
-  let isImplicitAttrsSection = true;
-  while (i < attrs.length) {
-    let item = attrs[i++];
-    if (typeof item === "string" && isImplicitAttrsSection) {
-      const value = attrs[i++];
-      if (isProjectionMode && item === "class") {
-        if (classIndexOf(value.toLowerCase(), cssClassToMatch, 0) !== -1) {
-          return true;
-        }
+  if (isProjectionMode) {
+    for (; i < attrs.length && typeof attrs[i] === "string"; i += 2) {
+      if (attrs[i] === "class" && classIndexOf(attrs[i + 1].toLowerCase(), cssClassToMatch, 0) !== -1) {
+        return true;
       }
-    } else if (item === 1) {
-      while (i < attrs.length && typeof (item = attrs[i++]) == "string") {
-        if (item.toLowerCase() === cssClassToMatch)
-          return true;
+    }
+  } else if (isInlineTemplate(tNode)) {
+    return false;
+  }
+  i = attrs.indexOf(1, i);
+  if (i > -1) {
+    let item;
+    while (++i < attrs.length && typeof (item = attrs[i]) === "string") {
+      if (item.toLowerCase() === cssClassToMatch) {
+        return true;
       }
-      return false;
-    } else if (typeof item === "number") {
-      isImplicitAttrsSection = false;
     }
   }
   return false;
@@ -4140,8 +4710,8 @@ function hasTagAndTypeMatch(tNode, currentSelector, isProjectionMode) {
 function isNodeMatchingSelector(tNode, selector, isProjectionMode) {
   ngDevMode && assertDefined(selector[0], "Selector should have a tag name");
   let mode = 4;
-  const nodeAttrs = tNode.attrs || [];
-  const nameOnlyMarkerIdx = getNameOnlyMarkerIndex(nodeAttrs);
+  const nodeAttrs = tNode.attrs;
+  const nameOnlyMarkerIdx = nodeAttrs !== null ? getNameOnlyMarkerIndex(nodeAttrs) : 0;
   let skipToNextSelector = false;
   for (let i = 0; i < selector.length; i++) {
     const current = selector[i];
@@ -4164,18 +4734,15 @@ function isNodeMatchingSelector(tNode, selector, isProjectionMode) {
           return false;
         skipToNextSelector = true;
       }
-    } else {
-      const selectorAttrValue = mode & 8 ? current : selector[++i];
-      if (mode & 8 && tNode.attrs !== null) {
-        if (!isCssClassMatching(tNode.attrs, selectorAttrValue, isProjectionMode)) {
-          if (isPositive(mode))
-            return false;
-          skipToNextSelector = true;
-        }
-        continue;
+    } else if (mode & 8) {
+      if (nodeAttrs === null || !isCssClassMatching(tNode, nodeAttrs, current, isProjectionMode)) {
+        if (isPositive(mode))
+          return false;
+        skipToNextSelector = true;
       }
-      const attrName = mode & 8 ? "class" : current;
-      const attrIndexInNode = findAttrIndexInNode(attrName, nodeAttrs, isInlineTemplate(tNode), isProjectionMode);
+    } else {
+      const selectorAttrValue = selector[++i];
+      const attrIndexInNode = findAttrIndexInNode(current, nodeAttrs, isInlineTemplate(tNode), isProjectionMode);
       if (attrIndexInNode === -1) {
         if (isPositive(mode))
           return false;
@@ -4190,8 +4757,7 @@ function isNodeMatchingSelector(tNode, selector, isProjectionMode) {
           ngDevMode && assertNotEqual(nodeAttrs[attrIndexInNode], 0, "We do not match directives on namespaced attributes");
           nodeAttrValue = nodeAttrs[attrIndexInNode + 1].toLowerCase();
         }
-        const compareAgainstClassName = mode & 8 ? nodeAttrValue : null;
-        if (compareAgainstClassName && classIndexOf(compareAgainstClassName, selectorAttrValue, 0) !== -1 || mode & 2 && selectorAttrValue !== nodeAttrValue) {
+        if (mode & 2 && selectorAttrValue !== nodeAttrValue) {
           if (isPositive(mode))
             return false;
           skipToNextSelector = true;
@@ -4566,6 +5132,763 @@ function getComponentId(componentDef) {
   }
   return compId;
 }
+function makeEnvironmentProviders(providers) {
+  return {
+    ɵproviders: providers
+  };
+}
+function importProvidersFrom(...sources) {
+  return {
+    ɵproviders: internalImportProvidersFrom(true, sources),
+    ɵfromNgModule: true
+  };
+}
+function internalImportProvidersFrom(checkForStandaloneCmp, ...sources) {
+  const providersOut = [];
+  const dedup = /* @__PURE__ */ new Set();
+  let injectorTypesWithProviders;
+  const collectProviders = (provider) => {
+    providersOut.push(provider);
+  };
+  deepForEach(sources, (source) => {
+    if ((typeof ngDevMode === "undefined" || ngDevMode) && checkForStandaloneCmp) {
+      const cmpDef = getComponentDef(source);
+      if (cmpDef?.standalone) {
+        throw new RuntimeError(800, `Importing providers supports NgModule or ModuleWithProviders but got a standalone component "${stringifyForError(source)}"`);
+      }
+    }
+    const internalSource = source;
+    if (walkProviderTree(internalSource, collectProviders, [], dedup)) {
+      injectorTypesWithProviders ||= [];
+      injectorTypesWithProviders.push(internalSource);
+    }
+  });
+  if (injectorTypesWithProviders !== void 0) {
+    processInjectorTypesWithProviders(injectorTypesWithProviders, collectProviders);
+  }
+  return providersOut;
+}
+function processInjectorTypesWithProviders(typesWithProviders, visitor) {
+  for (let i = 0; i < typesWithProviders.length; i++) {
+    const { ngModule, providers } = typesWithProviders[i];
+    deepForEachProvider(providers, (provider) => {
+      ngDevMode && validateProvider(provider, providers || EMPTY_ARRAY, ngModule);
+      visitor(provider, ngModule);
+    });
+  }
+}
+function walkProviderTree(container, visitor, parents, dedup) {
+  container = resolveForwardRef(container);
+  if (!container)
+    return false;
+  let defType = null;
+  let injDef = getInjectorDef(container);
+  const cmpDef = !injDef && getComponentDef(container);
+  if (!injDef && !cmpDef) {
+    const ngModule = container.ngModule;
+    injDef = getInjectorDef(ngModule);
+    if (injDef) {
+      defType = ngModule;
+    } else {
+      return false;
+    }
+  } else if (cmpDef && !cmpDef.standalone) {
+    return false;
+  } else {
+    defType = container;
+  }
+  if (ngDevMode && parents.indexOf(defType) !== -1) {
+    const defName = stringify(defType);
+    const path = parents.map(stringify);
+    throwCyclicDependencyError(defName, path);
+  }
+  const isDuplicate = dedup.has(defType);
+  if (cmpDef) {
+    if (isDuplicate) {
+      return false;
+    }
+    dedup.add(defType);
+    if (cmpDef.dependencies) {
+      const deps = typeof cmpDef.dependencies === "function" ? cmpDef.dependencies() : cmpDef.dependencies;
+      for (const dep of deps) {
+        walkProviderTree(dep, visitor, parents, dedup);
+      }
+    }
+  } else if (injDef) {
+    if (injDef.imports != null && !isDuplicate) {
+      ngDevMode && parents.push(defType);
+      dedup.add(defType);
+      let importTypesWithProviders;
+      try {
+        deepForEach(injDef.imports, (imported) => {
+          if (walkProviderTree(imported, visitor, parents, dedup)) {
+            importTypesWithProviders ||= [];
+            importTypesWithProviders.push(imported);
+          }
+        });
+      } finally {
+        ngDevMode && parents.pop();
+      }
+      if (importTypesWithProviders !== void 0) {
+        processInjectorTypesWithProviders(importTypesWithProviders, visitor);
+      }
+    }
+    if (!isDuplicate) {
+      const factory = getFactoryDef(defType) || (() => new defType());
+      visitor({ provide: defType, useFactory: factory, deps: EMPTY_ARRAY }, defType);
+      visitor({ provide: INJECTOR_DEF_TYPES, useValue: defType, multi: true }, defType);
+      visitor({ provide: ENVIRONMENT_INITIALIZER, useValue: () => ɵɵinject(defType), multi: true }, defType);
+    }
+    const defProviders = injDef.providers;
+    if (defProviders != null && !isDuplicate) {
+      const injectorType = container;
+      deepForEachProvider(defProviders, (provider) => {
+        ngDevMode && validateProvider(provider, defProviders, injectorType);
+        visitor(provider, injectorType);
+      });
+    }
+  } else {
+    return false;
+  }
+  return defType !== container && container.providers !== void 0;
+}
+function validateProvider(provider, providers, containerType) {
+  if (isTypeProvider(provider) || isValueProvider(provider) || isFactoryProvider(provider) || isExistingProvider(provider)) {
+    return;
+  }
+  const classRef = resolveForwardRef(provider && (provider.useClass || provider.provide));
+  if (!classRef) {
+    throwInvalidProviderError(containerType, providers, provider);
+  }
+}
+function deepForEachProvider(providers, fn) {
+  for (let provider of providers) {
+    if (isEnvironmentProviders(provider)) {
+      provider = provider.ɵproviders;
+    }
+    if (Array.isArray(provider)) {
+      deepForEachProvider(provider, fn);
+    } else {
+      fn(provider);
+    }
+  }
+}
+var USE_VALUE$1 = getClosureSafeProperty({ provide: String, useValue: getClosureSafeProperty });
+function isValueProvider(value) {
+  return value !== null && typeof value == "object" && USE_VALUE$1 in value;
+}
+function isExistingProvider(value) {
+  return !!(value && value.useExisting);
+}
+function isFactoryProvider(value) {
+  return !!(value && value.useFactory);
+}
+function isTypeProvider(value) {
+  return typeof value === "function";
+}
+function isClassProvider(value) {
+  return !!value.useClass;
+}
+var INJECTOR_SCOPE = new InjectionToken(ngDevMode ? "Set Injector scope." : "");
+var NOT_YET = {};
+var CIRCULAR = {};
+var NULL_INJECTOR = void 0;
+function getNullInjector() {
+  if (NULL_INJECTOR === void 0) {
+    NULL_INJECTOR = new NullInjector();
+  }
+  return NULL_INJECTOR;
+}
+var EnvironmentInjector = class {
+};
+var R3Injector = class extends EnvironmentInjector {
+  /**
+   * Flag indicating that this injector was previously destroyed.
+   */
+  get destroyed() {
+    return this._destroyed;
+  }
+  constructor(providers, parent, source, scopes) {
+    super();
+    this.parent = parent;
+    this.source = source;
+    this.scopes = scopes;
+    this.records = /* @__PURE__ */ new Map();
+    this._ngOnDestroyHooks = /* @__PURE__ */ new Set();
+    this._onDestroyHooks = [];
+    this._destroyed = false;
+    forEachSingleProvider(providers, (provider) => this.processProvider(provider));
+    this.records.set(INJECTOR$1, makeRecord(void 0, this));
+    if (scopes.has("environment")) {
+      this.records.set(EnvironmentInjector, makeRecord(void 0, this));
+    }
+    const record = this.records.get(INJECTOR_SCOPE);
+    if (record != null && typeof record.value === "string") {
+      this.scopes.add(record.value);
+    }
+    this.injectorDefTypes = new Set(this.get(INJECTOR_DEF_TYPES, EMPTY_ARRAY, InjectFlags.Self));
+  }
+  /**
+   * Destroy the injector and release references to every instance or provider associated with it.
+   *
+   * Also calls the `OnDestroy` lifecycle hooks of every instance that was created for which a
+   * hook was found.
+   */
+  destroy() {
+    this.assertNotDestroyed();
+    this._destroyed = true;
+    const prevConsumer = setActiveConsumer(null);
+    try {
+      for (const service of this._ngOnDestroyHooks) {
+        service.ngOnDestroy();
+      }
+      const onDestroyHooks = this._onDestroyHooks;
+      this._onDestroyHooks = [];
+      for (const hook of onDestroyHooks) {
+        hook();
+      }
+    } finally {
+      this.records.clear();
+      this._ngOnDestroyHooks.clear();
+      this.injectorDefTypes.clear();
+      setActiveConsumer(prevConsumer);
+    }
+  }
+  onDestroy(callback) {
+    this.assertNotDestroyed();
+    this._onDestroyHooks.push(callback);
+    return () => this.removeOnDestroy(callback);
+  }
+  runInContext(fn) {
+    this.assertNotDestroyed();
+    const previousInjector = setCurrentInjector(this);
+    const previousInjectImplementation = setInjectImplementation(void 0);
+    let prevInjectContext;
+    if (ngDevMode) {
+      prevInjectContext = setInjectorProfilerContext({ injector: this, token: null });
+    }
+    try {
+      return fn();
+    } finally {
+      setCurrentInjector(previousInjector);
+      setInjectImplementation(previousInjectImplementation);
+      ngDevMode && setInjectorProfilerContext(prevInjectContext);
+    }
+  }
+  get(token, notFoundValue = THROW_IF_NOT_FOUND, flags = InjectFlags.Default) {
+    this.assertNotDestroyed();
+    if (token.hasOwnProperty(NG_ENV_ID)) {
+      return token[NG_ENV_ID](this);
+    }
+    flags = convertToBitFlags(flags);
+    let prevInjectContext;
+    if (ngDevMode) {
+      prevInjectContext = setInjectorProfilerContext({ injector: this, token });
+    }
+    const previousInjector = setCurrentInjector(this);
+    const previousInjectImplementation = setInjectImplementation(void 0);
+    try {
+      if (!(flags & InjectFlags.SkipSelf)) {
+        let record = this.records.get(token);
+        if (record === void 0) {
+          const def = couldBeInjectableType(token) && getInjectableDef(token);
+          if (def && this.injectableDefInScope(def)) {
+            if (ngDevMode) {
+              runInInjectorProfilerContext(this, token, () => {
+                emitProviderConfiguredEvent(token);
+              });
+            }
+            record = makeRecord(injectableDefOrInjectorDefFactory(token), NOT_YET);
+          } else {
+            record = null;
+          }
+          this.records.set(token, record);
+        }
+        if (record != null) {
+          return this.hydrate(token, record);
+        }
+      }
+      const nextInjector = !(flags & InjectFlags.Self) ? this.parent : getNullInjector();
+      notFoundValue = flags & InjectFlags.Optional && notFoundValue === THROW_IF_NOT_FOUND ? null : notFoundValue;
+      return nextInjector.get(token, notFoundValue);
+    } catch (e) {
+      if (e.name === "NullInjectorError") {
+        const path = e[NG_TEMP_TOKEN_PATH] = e[NG_TEMP_TOKEN_PATH] || [];
+        path.unshift(stringify(token));
+        if (previousInjector) {
+          throw e;
+        } else {
+          return catchInjectorError(e, token, "R3InjectorError", this.source);
+        }
+      } else {
+        throw e;
+      }
+    } finally {
+      setInjectImplementation(previousInjectImplementation);
+      setCurrentInjector(previousInjector);
+      ngDevMode && setInjectorProfilerContext(prevInjectContext);
+    }
+  }
+  /** @internal */
+  resolveInjectorInitializers() {
+    const prevConsumer = setActiveConsumer(null);
+    const previousInjector = setCurrentInjector(this);
+    const previousInjectImplementation = setInjectImplementation(void 0);
+    let prevInjectContext;
+    if (ngDevMode) {
+      prevInjectContext = setInjectorProfilerContext({ injector: this, token: null });
+    }
+    try {
+      const initializers = this.get(ENVIRONMENT_INITIALIZER, EMPTY_ARRAY, InjectFlags.Self);
+      if (ngDevMode && !Array.isArray(initializers)) {
+        throw new RuntimeError(-209, `Unexpected type of the \`ENVIRONMENT_INITIALIZER\` token value (expected an array, but got ${typeof initializers}). Please check that the \`ENVIRONMENT_INITIALIZER\` token is configured as a \`multi: true\` provider.`);
+      }
+      for (const initializer of initializers) {
+        initializer();
+      }
+    } finally {
+      setCurrentInjector(previousInjector);
+      setInjectImplementation(previousInjectImplementation);
+      ngDevMode && setInjectorProfilerContext(prevInjectContext);
+      setActiveConsumer(prevConsumer);
+    }
+  }
+  toString() {
+    const tokens = [];
+    const records = this.records;
+    for (const token of records.keys()) {
+      tokens.push(stringify(token));
+    }
+    return `R3Injector[${tokens.join(", ")}]`;
+  }
+  assertNotDestroyed() {
+    if (this._destroyed) {
+      throw new RuntimeError(205, ngDevMode && "Injector has already been destroyed.");
+    }
+  }
+  /**
+   * Process a `SingleProvider` and add it.
+   */
+  processProvider(provider) {
+    provider = resolveForwardRef(provider);
+    let token = isTypeProvider(provider) ? provider : resolveForwardRef(provider && provider.provide);
+    const record = providerToRecord(provider);
+    if (ngDevMode) {
+      runInInjectorProfilerContext(this, token, () => {
+        if (isValueProvider(provider)) {
+          emitInstanceCreatedByInjectorEvent(provider.useValue);
+        }
+        emitProviderConfiguredEvent(provider);
+      });
+    }
+    if (!isTypeProvider(provider) && provider.multi === true) {
+      let multiRecord = this.records.get(token);
+      if (multiRecord) {
+        if (ngDevMode && multiRecord.multi === void 0) {
+          throwMixedMultiProviderError();
+        }
+      } else {
+        multiRecord = makeRecord(void 0, NOT_YET, true);
+        multiRecord.factory = () => injectArgs(multiRecord.multi);
+        this.records.set(token, multiRecord);
+      }
+      token = provider;
+      multiRecord.multi.push(provider);
+    } else {
+      if (ngDevMode) {
+        const existing = this.records.get(token);
+        if (existing && existing.multi !== void 0) {
+          throwMixedMultiProviderError();
+        }
+      }
+    }
+    this.records.set(token, record);
+  }
+  hydrate(token, record) {
+    const prevConsumer = setActiveConsumer(null);
+    try {
+      if (ngDevMode && record.value === CIRCULAR) {
+        throwCyclicDependencyError(stringify(token));
+      } else if (record.value === NOT_YET) {
+        record.value = CIRCULAR;
+        if (ngDevMode) {
+          runInInjectorProfilerContext(this, token, () => {
+            record.value = record.factory();
+            emitInstanceCreatedByInjectorEvent(record.value);
+          });
+        } else {
+          record.value = record.factory();
+        }
+      }
+      if (typeof record.value === "object" && record.value && hasOnDestroy(record.value)) {
+        this._ngOnDestroyHooks.add(record.value);
+      }
+      return record.value;
+    } finally {
+      setActiveConsumer(prevConsumer);
+    }
+  }
+  injectableDefInScope(def) {
+    if (!def.providedIn) {
+      return false;
+    }
+    const providedIn = resolveForwardRef(def.providedIn);
+    if (typeof providedIn === "string") {
+      return providedIn === "any" || this.scopes.has(providedIn);
+    } else {
+      return this.injectorDefTypes.has(providedIn);
+    }
+  }
+  removeOnDestroy(callback) {
+    const destroyCBIdx = this._onDestroyHooks.indexOf(callback);
+    if (destroyCBIdx !== -1) {
+      this._onDestroyHooks.splice(destroyCBIdx, 1);
+    }
+  }
+};
+function injectableDefOrInjectorDefFactory(token) {
+  const injectableDef = getInjectableDef(token);
+  const factory = injectableDef !== null ? injectableDef.factory : getFactoryDef(token);
+  if (factory !== null) {
+    return factory;
+  }
+  if (token instanceof InjectionToken) {
+    throw new RuntimeError(204, ngDevMode && `Token ${stringify(token)} is missing a ɵprov definition.`);
+  }
+  if (token instanceof Function) {
+    return getUndecoratedInjectableFactory(token);
+  }
+  throw new RuntimeError(204, ngDevMode && "unreachable");
+}
+function getUndecoratedInjectableFactory(token) {
+  const paramLength = token.length;
+  if (paramLength > 0) {
+    throw new RuntimeError(204, ngDevMode && `Can't resolve all parameters for ${stringify(token)}: (${newArray(paramLength, "?").join(", ")}).`);
+  }
+  const inheritedInjectableDef = getInheritedInjectableDef(token);
+  if (inheritedInjectableDef !== null) {
+    return () => inheritedInjectableDef.factory(token);
+  } else {
+    return () => new token();
+  }
+}
+function providerToRecord(provider) {
+  if (isValueProvider(provider)) {
+    return makeRecord(void 0, provider.useValue);
+  } else {
+    const factory = providerToFactory(provider);
+    return makeRecord(factory, NOT_YET);
+  }
+}
+function providerToFactory(provider, ngModuleType, providers) {
+  let factory = void 0;
+  if (ngDevMode && isEnvironmentProviders(provider)) {
+    throwInvalidProviderError(void 0, providers, provider);
+  }
+  if (isTypeProvider(provider)) {
+    const unwrappedProvider = resolveForwardRef(provider);
+    return getFactoryDef(unwrappedProvider) || injectableDefOrInjectorDefFactory(unwrappedProvider);
+  } else {
+    if (isValueProvider(provider)) {
+      factory = () => resolveForwardRef(provider.useValue);
+    } else if (isFactoryProvider(provider)) {
+      factory = () => provider.useFactory(...injectArgs(provider.deps || []));
+    } else if (isExistingProvider(provider)) {
+      factory = () => ɵɵinject(resolveForwardRef(provider.useExisting));
+    } else {
+      const classRef = resolveForwardRef(provider && (provider.useClass || provider.provide));
+      if (ngDevMode && !classRef) {
+        throwInvalidProviderError(ngModuleType, providers, provider);
+      }
+      if (hasDeps(provider)) {
+        factory = () => new classRef(...injectArgs(provider.deps));
+      } else {
+        return getFactoryDef(classRef) || injectableDefOrInjectorDefFactory(classRef);
+      }
+    }
+  }
+  return factory;
+}
+function makeRecord(factory, value, multi = false) {
+  return {
+    factory,
+    value,
+    multi: multi ? [] : void 0
+  };
+}
+function hasDeps(value) {
+  return !!value.deps;
+}
+function hasOnDestroy(value) {
+  return value !== null && typeof value === "object" && typeof value.ngOnDestroy === "function";
+}
+function couldBeInjectableType(value) {
+  return typeof value === "function" || typeof value === "object" && value instanceof InjectionToken;
+}
+function forEachSingleProvider(providers, fn) {
+  for (const provider of providers) {
+    if (Array.isArray(provider)) {
+      forEachSingleProvider(provider, fn);
+    } else if (provider && isEnvironmentProviders(provider)) {
+      forEachSingleProvider(provider.ɵproviders, fn);
+    } else {
+      fn(provider);
+    }
+  }
+}
+function runInInjectionContext(injector, fn) {
+  if (injector instanceof R3Injector) {
+    injector.assertNotDestroyed();
+  }
+  let prevInjectorProfilerContext;
+  if (ngDevMode) {
+    prevInjectorProfilerContext = setInjectorProfilerContext({ injector, token: null });
+  }
+  const prevInjector = setCurrentInjector(injector);
+  const previousInjectImplementation = setInjectImplementation(void 0);
+  try {
+    return fn();
+  } finally {
+    setCurrentInjector(prevInjector);
+    ngDevMode && setInjectorProfilerContext(prevInjectorProfilerContext);
+    setInjectImplementation(previousInjectImplementation);
+  }
+}
+function isInInjectionContext() {
+  return getInjectImplementation() !== void 0 || getCurrentInjector() != null;
+}
+function assertInInjectionContext(debugFn) {
+  if (!isInInjectionContext()) {
+    throw new RuntimeError(-203, ngDevMode && debugFn.name + "() can only be used within an injection context such as a constructor, a factory function, a field initializer, or a function used with `runInInjectionContext`");
+  }
+}
+var FactoryTarget;
+(function(FactoryTarget2) {
+  FactoryTarget2[FactoryTarget2["Directive"] = 0] = "Directive";
+  FactoryTarget2[FactoryTarget2["Component"] = 1] = "Component";
+  FactoryTarget2[FactoryTarget2["Injectable"] = 2] = "Injectable";
+  FactoryTarget2[FactoryTarget2["Pipe"] = 3] = "Pipe";
+  FactoryTarget2[FactoryTarget2["NgModule"] = 4] = "NgModule";
+})(FactoryTarget || (FactoryTarget = {}));
+var R3TemplateDependencyKind;
+(function(R3TemplateDependencyKind2) {
+  R3TemplateDependencyKind2[R3TemplateDependencyKind2["Directive"] = 0] = "Directive";
+  R3TemplateDependencyKind2[R3TemplateDependencyKind2["Pipe"] = 1] = "Pipe";
+  R3TemplateDependencyKind2[R3TemplateDependencyKind2["NgModule"] = 2] = "NgModule";
+})(R3TemplateDependencyKind || (R3TemplateDependencyKind = {}));
+var ViewEncapsulation;
+(function(ViewEncapsulation2) {
+  ViewEncapsulation2[ViewEncapsulation2["Emulated"] = 0] = "Emulated";
+  ViewEncapsulation2[ViewEncapsulation2["None"] = 2] = "None";
+  ViewEncapsulation2[ViewEncapsulation2["ShadowDom"] = 3] = "ShadowDom";
+})(ViewEncapsulation || (ViewEncapsulation = {}));
+function getCompilerFacade(request) {
+  const globalNg = _global["ng"];
+  if (globalNg && globalNg.ɵcompilerFacade) {
+    return globalNg.ɵcompilerFacade;
+  }
+  if (typeof ngDevMode === "undefined" || ngDevMode) {
+    console.error(`JIT compilation failed for ${request.kind}`, request.type);
+    let message = `The ${request.kind} '${request.type.name}' needs to be compiled using the JIT compiler, but '@angular/compiler' is not available.
+
+`;
+    if (request.usage === 1) {
+      message += `The ${request.kind} is part of a library that has been partially compiled.
+`;
+      message += `However, the Angular Linker has not processed the library such that JIT compilation is used as fallback.
+`;
+      message += "\n";
+      message += `Ideally, the library is processed using the Angular Linker to become fully AOT compiled.
+`;
+    } else {
+      message += `JIT compilation is discouraged for production use-cases! Consider using AOT mode instead.
+`;
+    }
+    message += `Alternatively, the JIT compiler should be loaded by bootstrapping using '@angular/platform-browser-dynamic' or '@angular/platform-server',
+`;
+    message += `or manually provide the compiler with 'import "@angular/compiler";' before bootstrapping.`;
+    throw new Error(message);
+  } else {
+    throw new Error("JIT compiler unavailable");
+  }
+}
+var angularCoreDiEnv = {
+  "ɵɵdefineInjectable": ɵɵdefineInjectable,
+  "ɵɵdefineInjector": ɵɵdefineInjector,
+  "ɵɵinject": ɵɵinject,
+  "ɵɵinvalidFactoryDep": ɵɵinvalidFactoryDep,
+  "resolveForwardRef": resolveForwardRef
+};
+var Type = Function;
+function isType(v) {
+  return typeof v === "function";
+}
+var ES5_DELEGATE_CTOR = /^function\s+\S+\(\)\s*{[\s\S]+\.apply\(this,\s*(arguments|(?:[^()]+\(\[\],)?[^()]+\(arguments\).*)\)/;
+var ES2015_INHERITED_CLASS = /^class\s+[A-Za-z\d$_]*\s*extends\s+[^{]+{/;
+var ES2015_INHERITED_CLASS_WITH_CTOR = /^class\s+[A-Za-z\d$_]*\s*extends\s+[^{]+{[\s\S]*constructor\s*\(/;
+var ES2015_INHERITED_CLASS_WITH_DELEGATE_CTOR = /^class\s+[A-Za-z\d$_]*\s*extends\s+[^{]+{[\s\S]*constructor\s*\(\)\s*{[^}]*super\(\.\.\.arguments\)/;
+function isDelegateCtor(typeStr) {
+  return ES5_DELEGATE_CTOR.test(typeStr) || ES2015_INHERITED_CLASS_WITH_DELEGATE_CTOR.test(typeStr) || ES2015_INHERITED_CLASS.test(typeStr) && !ES2015_INHERITED_CLASS_WITH_CTOR.test(typeStr);
+}
+var ReflectionCapabilities = class {
+  constructor(reflect) {
+    this._reflect = reflect || _global["Reflect"];
+  }
+  factory(t) {
+    return (...args) => new t(...args);
+  }
+  /** @internal */
+  _zipTypesAndAnnotations(paramTypes, paramAnnotations) {
+    let result;
+    if (typeof paramTypes === "undefined") {
+      result = newArray(paramAnnotations.length);
+    } else {
+      result = newArray(paramTypes.length);
+    }
+    for (let i = 0; i < result.length; i++) {
+      if (typeof paramTypes === "undefined") {
+        result[i] = [];
+      } else if (paramTypes[i] && paramTypes[i] != Object) {
+        result[i] = [paramTypes[i]];
+      } else {
+        result[i] = [];
+      }
+      if (paramAnnotations && paramAnnotations[i] != null) {
+        result[i] = result[i].concat(paramAnnotations[i]);
+      }
+    }
+    return result;
+  }
+  _ownParameters(type, parentCtor) {
+    const typeStr = type.toString();
+    if (isDelegateCtor(typeStr)) {
+      return null;
+    }
+    if (type.parameters && type.parameters !== parentCtor.parameters) {
+      return type.parameters;
+    }
+    const tsickleCtorParams = type.ctorParameters;
+    if (tsickleCtorParams && tsickleCtorParams !== parentCtor.ctorParameters) {
+      const ctorParameters = typeof tsickleCtorParams === "function" ? tsickleCtorParams() : tsickleCtorParams;
+      const paramTypes2 = ctorParameters.map((ctorParam) => ctorParam && ctorParam.type);
+      const paramAnnotations2 = ctorParameters.map((ctorParam) => ctorParam && convertTsickleDecoratorIntoMetadata(ctorParam.decorators));
+      return this._zipTypesAndAnnotations(paramTypes2, paramAnnotations2);
+    }
+    const paramAnnotations = type.hasOwnProperty(PARAMETERS) && type[PARAMETERS];
+    const paramTypes = this._reflect && this._reflect.getOwnMetadata && this._reflect.getOwnMetadata("design:paramtypes", type);
+    if (paramTypes || paramAnnotations) {
+      return this._zipTypesAndAnnotations(paramTypes, paramAnnotations);
+    }
+    return newArray(type.length);
+  }
+  parameters(type) {
+    if (!isType(type)) {
+      return [];
+    }
+    const parentCtor = getParentCtor(type);
+    let parameters = this._ownParameters(type, parentCtor);
+    if (!parameters && parentCtor !== Object) {
+      parameters = this.parameters(parentCtor);
+    }
+    return parameters || [];
+  }
+  _ownAnnotations(typeOrFunc, parentCtor) {
+    if (typeOrFunc.annotations && typeOrFunc.annotations !== parentCtor.annotations) {
+      let annotations = typeOrFunc.annotations;
+      if (typeof annotations === "function" && annotations.annotations) {
+        annotations = annotations.annotations;
+      }
+      return annotations;
+    }
+    if (typeOrFunc.decorators && typeOrFunc.decorators !== parentCtor.decorators) {
+      return convertTsickleDecoratorIntoMetadata(typeOrFunc.decorators);
+    }
+    if (typeOrFunc.hasOwnProperty(ANNOTATIONS)) {
+      return typeOrFunc[ANNOTATIONS];
+    }
+    return null;
+  }
+  annotations(typeOrFunc) {
+    if (!isType(typeOrFunc)) {
+      return [];
+    }
+    const parentCtor = getParentCtor(typeOrFunc);
+    const ownAnnotations = this._ownAnnotations(typeOrFunc, parentCtor) || [];
+    const parentAnnotations = parentCtor !== Object ? this.annotations(parentCtor) : [];
+    return parentAnnotations.concat(ownAnnotations);
+  }
+  _ownPropMetadata(typeOrFunc, parentCtor) {
+    if (typeOrFunc.propMetadata && typeOrFunc.propMetadata !== parentCtor.propMetadata) {
+      let propMetadata = typeOrFunc.propMetadata;
+      if (typeof propMetadata === "function" && propMetadata.propMetadata) {
+        propMetadata = propMetadata.propMetadata;
+      }
+      return propMetadata;
+    }
+    if (typeOrFunc.propDecorators && typeOrFunc.propDecorators !== parentCtor.propDecorators) {
+      const propDecorators = typeOrFunc.propDecorators;
+      const propMetadata = {};
+      Object.keys(propDecorators).forEach((prop) => {
+        propMetadata[prop] = convertTsickleDecoratorIntoMetadata(propDecorators[prop]);
+      });
+      return propMetadata;
+    }
+    if (typeOrFunc.hasOwnProperty(PROP_METADATA)) {
+      return typeOrFunc[PROP_METADATA];
+    }
+    return null;
+  }
+  propMetadata(typeOrFunc) {
+    if (!isType(typeOrFunc)) {
+      return {};
+    }
+    const parentCtor = getParentCtor(typeOrFunc);
+    const propMetadata = {};
+    if (parentCtor !== Object) {
+      const parentPropMetadata = this.propMetadata(parentCtor);
+      Object.keys(parentPropMetadata).forEach((propName) => {
+        propMetadata[propName] = parentPropMetadata[propName];
+      });
+    }
+    const ownPropMetadata = this._ownPropMetadata(typeOrFunc, parentCtor);
+    if (ownPropMetadata) {
+      Object.keys(ownPropMetadata).forEach((propName) => {
+        const decorators = [];
+        if (propMetadata.hasOwnProperty(propName)) {
+          decorators.push(...propMetadata[propName]);
+        }
+        decorators.push(...ownPropMetadata[propName]);
+        propMetadata[propName] = decorators;
+      });
+    }
+    return propMetadata;
+  }
+  ownPropMetadata(typeOrFunc) {
+    if (!isType(typeOrFunc)) {
+      return {};
+    }
+    return this._ownPropMetadata(typeOrFunc, getParentCtor(typeOrFunc)) || {};
+  }
+  hasLifecycleHook(type, lcProperty) {
+    return type instanceof Type && lcProperty in type.prototype;
+  }
+};
+function convertTsickleDecoratorIntoMetadata(decoratorInvocations) {
+  if (!decoratorInvocations) {
+    return [];
+  }
+  return decoratorInvocations.map((decoratorInvocation) => {
+    const decoratorType = decoratorInvocation.type;
+    const annotationCls = decoratorType.annotationCls;
+    const annotationArgs = decoratorInvocation.args ? decoratorInvocation.args : [];
+    return new annotationCls(...annotationArgs);
+  });
+}
+function getParentCtor(ctor) {
+  const parentProto = ctor.prototype ? Object.getPrototypeOf(ctor.prototype) : null;
+  const parentCtor = parentProto ? parentProto.constructor : null;
+  return parentCtor || Object;
+}
 var HOST = 0;
 var TVIEW = 1;
 var FLAGS = 2;
@@ -4575,7 +5898,7 @@ var T_HOST = 5;
 var HYDRATION = 6;
 var CLEANUP = 7;
 var CONTEXT = 8;
-var INJECTOR$1 = 9;
+var INJECTOR = 9;
 var ENVIRONMENT = 10;
 var RENDERER = 11;
 var CHILD_HEAD = 12;
@@ -4744,6 +6067,78 @@ function assertNodeInjector(lView, injectorIndex) {
     /* NodeInjectorOffset.PARENT */
   ], "injectorIndex should point to parent injector");
 }
+var SimpleChange = class {
+  constructor(previousValue, currentValue, firstChange) {
+    this.previousValue = previousValue;
+    this.currentValue = currentValue;
+    this.firstChange = firstChange;
+  }
+  /**
+   * Check whether the new value is the first value assigned.
+   */
+  isFirstChange() {
+    return this.firstChange;
+  }
+};
+function applyValueToInputField(instance, inputSignalNode, privateName, value) {
+  if (inputSignalNode !== null) {
+    inputSignalNode.applyValueToInputSignal(inputSignalNode, value);
+  } else {
+    instance[privateName] = value;
+  }
+}
+function ɵɵNgOnChangesFeature() {
+  return NgOnChangesFeatureImpl;
+}
+function NgOnChangesFeatureImpl(definition) {
+  if (definition.type.prototype.ngOnChanges) {
+    definition.setInput = ngOnChangesSetInput;
+  }
+  return rememberChangeHistoryAndInvokeOnChangesHook;
+}
+ɵɵNgOnChangesFeature.ngInherit = true;
+function rememberChangeHistoryAndInvokeOnChangesHook() {
+  const simpleChangesStore = getSimpleChangesStore(this);
+  const current = simpleChangesStore?.current;
+  if (current) {
+    const previous = simpleChangesStore.previous;
+    if (previous === EMPTY_OBJ) {
+      simpleChangesStore.previous = current;
+    } else {
+      for (let key in current) {
+        previous[key] = current[key];
+      }
+    }
+    simpleChangesStore.current = null;
+    this.ngOnChanges(current);
+  }
+}
+function ngOnChangesSetInput(instance, inputSignalNode, value, publicName, privateName) {
+  const declaredName = this.declaredInputs[publicName];
+  ngDevMode && assertString(declaredName, "Name of input in ngOnChanges has to be a string");
+  const simpleChangesStore = getSimpleChangesStore(instance) || setSimpleChangesStore(instance, { previous: EMPTY_OBJ, current: null });
+  const current = simpleChangesStore.current || (simpleChangesStore.current = {});
+  const previous = simpleChangesStore.previous;
+  const previousChange = previous[declaredName];
+  current[declaredName] = new SimpleChange(previousChange && previousChange.currentValue, value, previous === EMPTY_OBJ);
+  applyValueToInputField(instance, inputSignalNode, privateName, value);
+}
+var SIMPLE_CHANGES_STORE = "__ngSimpleChanges__";
+function getSimpleChangesStore(instance) {
+  return instance[SIMPLE_CHANGES_STORE] || null;
+}
+function setSimpleChangesStore(instance, store2) {
+  return instance[SIMPLE_CHANGES_STORE] = store2;
+}
+var profilerCallback = null;
+var setProfiler = (profiler2) => {
+  profilerCallback = profiler2;
+};
+var profiler = function(event, instance, hookOrListener) {
+  if (profilerCallback != null) {
+    profilerCallback(event, instance, hookOrListener);
+  }
+};
 var SVG_NAMESPACE = "svg";
 var MATH_ML_NAMESPACE = "math";
 var _ensureDirtyViewsAreAlwaysReachable = false;
@@ -4843,6 +6238,10 @@ function requiresRefreshOrTraversal(lView) {
   return !!(lView[FLAGS] & (1024 | 8192) || lView[REACTIVE_TEMPLATE_CONSUMER]?.dirty);
 }
 function updateAncestorTraversalFlagsOnAttach(lView) {
+  lView[ENVIRONMENT].changeDetectionScheduler?.notify(
+    1
+    /* NotificationType.AfterRenderHooks */
+  );
   if (requiresRefreshOrTraversal(lView)) {
     markAncestorsForTraversal(lView);
   } else if (lView[FLAGS] & 64) {
@@ -5187,1930 +6586,6 @@ function wasLastNodeCreated() {
 function lastNodeWasCreated(flag) {
   _wasLastNodeCreated = flag;
 }
-function injectElementRef() {
-  return createElementRef(getCurrentTNode(), getLView());
-}
-function createElementRef(tNode, lView) {
-  return new ElementRef(getNativeByTNode(tNode, lView));
-}
-var _ElementRef = class _ElementRef {
-  constructor(nativeElement) {
-    this.nativeElement = nativeElement;
-  }
-};
-_ElementRef.__NG_ELEMENT_ID__ = injectElementRef;
-var ElementRef = _ElementRef;
-function unwrapElementRef(value) {
-  return value instanceof ElementRef ? value.nativeElement : value;
-}
-function arrayEquals(a, b, identityAccessor) {
-  if (a.length !== b.length)
-    return false;
-  for (let i = 0; i < a.length; i++) {
-    let valueA = a[i];
-    let valueB = b[i];
-    if (identityAccessor) {
-      valueA = identityAccessor(valueA);
-      valueB = identityAccessor(valueB);
-    }
-    if (valueB !== valueA) {
-      return false;
-    }
-  }
-  return true;
-}
-function flatten(list) {
-  return list.flat(Number.POSITIVE_INFINITY);
-}
-function deepForEach(input2, fn) {
-  input2.forEach((value) => Array.isArray(value) ? deepForEach(value, fn) : fn(value));
-}
-function addToArray(arr, index, value) {
-  if (index >= arr.length) {
-    arr.push(value);
-  } else {
-    arr.splice(index, 0, value);
-  }
-}
-function removeFromArray(arr, index) {
-  if (index >= arr.length - 1) {
-    return arr.pop();
-  } else {
-    return arr.splice(index, 1)[0];
-  }
-}
-function newArray(size, value) {
-  const list = [];
-  for (let i = 0; i < size; i++) {
-    list.push(value);
-  }
-  return list;
-}
-function arraySplice(array, index, count2) {
-  const length = array.length - count2;
-  while (index < length) {
-    array[index] = array[index + count2];
-    index++;
-  }
-  while (count2--) {
-    array.pop();
-  }
-}
-function arrayInsert2(array, index, value1, value2) {
-  ngDevMode && assertLessThanOrEqual(index, array.length, "Can't insert past array end.");
-  let end = array.length;
-  if (end == index) {
-    array.push(value1, value2);
-  } else if (end === 1) {
-    array.push(value2, array[0]);
-    array[0] = value1;
-  } else {
-    end--;
-    array.push(array[end - 1], array[end]);
-    while (end > index) {
-      const previousEnd = end - 2;
-      array[end] = array[previousEnd];
-      end--;
-    }
-    array[index] = value1;
-    array[index + 1] = value2;
-  }
-}
-function keyValueArraySet(keyValueArray, key, value) {
-  let index = keyValueArrayIndexOf(keyValueArray, key);
-  if (index >= 0) {
-    keyValueArray[index | 1] = value;
-  } else {
-    index = ~index;
-    arrayInsert2(keyValueArray, index, key, value);
-  }
-  return index;
-}
-function keyValueArrayGet(keyValueArray, key) {
-  const index = keyValueArrayIndexOf(keyValueArray, key);
-  if (index >= 0) {
-    return keyValueArray[index | 1];
-  }
-  return void 0;
-}
-function keyValueArrayIndexOf(keyValueArray, key) {
-  return _arrayIndexOfSorted(keyValueArray, key, 1);
-}
-function _arrayIndexOfSorted(array, value, shift) {
-  ngDevMode && assertEqual(Array.isArray(array), true, "Expecting an array");
-  let start = 0;
-  let end = array.length >> shift;
-  while (end !== start) {
-    const middle = start + (end - start >> 1);
-    const current = array[middle << shift];
-    if (value === current) {
-      return middle << shift;
-    } else if (current > value) {
-      end = middle;
-    } else {
-      start = middle + 1;
-    }
-  }
-  return ~(end << shift);
-}
-function symbolIterator() {
-  return this._results[Symbol.iterator]();
-}
-var _QueryList = class _QueryList {
-  /**
-   * Returns `Observable` of `QueryList` notifying the subscriber of changes.
-   */
-  get changes() {
-    return this._changes ??= new EventEmitter();
-  }
-  /**
-   * @param emitDistinctChangesOnly Whether `QueryList.changes` should fire only when actual change
-   *     has occurred. Or if it should fire when query is recomputed. (recomputing could resolve in
-   *     the same result)
-   */
-  constructor(_emitDistinctChangesOnly = false) {
-    this._emitDistinctChangesOnly = _emitDistinctChangesOnly;
-    this.dirty = true;
-    this._onDirty = void 0;
-    this._results = [];
-    this._changesDetected = false;
-    this._changes = void 0;
-    this.length = 0;
-    this.first = void 0;
-    this.last = void 0;
-    const proto = _QueryList.prototype;
-    if (!proto[Symbol.iterator])
-      proto[Symbol.iterator] = symbolIterator;
-  }
-  /**
-   * Returns the QueryList entry at `index`.
-   */
-  get(index) {
-    return this._results[index];
-  }
-  /**
-   * See
-   * [Array.map](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/map)
-   */
-  map(fn) {
-    return this._results.map(fn);
-  }
-  filter(fn) {
-    return this._results.filter(fn);
-  }
-  /**
-   * See
-   * [Array.find](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/find)
-   */
-  find(fn) {
-    return this._results.find(fn);
-  }
-  /**
-   * See
-   * [Array.reduce](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/reduce)
-   */
-  reduce(fn, init) {
-    return this._results.reduce(fn, init);
-  }
-  /**
-   * See
-   * [Array.forEach](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/forEach)
-   */
-  forEach(fn) {
-    this._results.forEach(fn);
-  }
-  /**
-   * See
-   * [Array.some](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/some)
-   */
-  some(fn) {
-    return this._results.some(fn);
-  }
-  /**
-   * Returns a copy of the internal results list as an Array.
-   */
-  toArray() {
-    return this._results.slice();
-  }
-  toString() {
-    return this._results.toString();
-  }
-  /**
-   * Updates the stored data of the query list, and resets the `dirty` flag to `false`, so that
-   * on change detection, it will not notify of changes to the queries, unless a new change
-   * occurs.
-   *
-   * @param resultsTree The query results to store
-   * @param identityAccessor Optional function for extracting stable object identity from a value
-   *    in the array. This function is executed for each element of the query result list while
-   *    comparing current query list with the new one (provided as a first argument of the `reset`
-   *    function) to detect if the lists are different. If the function is not provided, elements
-   *    are compared as is (without any pre-processing).
-   */
-  reset(resultsTree, identityAccessor) {
-    this.dirty = false;
-    const newResultFlat = flatten(resultsTree);
-    if (this._changesDetected = !arrayEquals(this._results, newResultFlat, identityAccessor)) {
-      this._results = newResultFlat;
-      this.length = newResultFlat.length;
-      this.last = newResultFlat[this.length - 1];
-      this.first = newResultFlat[0];
-    }
-  }
-  /**
-   * Triggers a change event by emitting on the `changes` {@link EventEmitter}.
-   */
-  notifyOnChanges() {
-    if (this._changes !== void 0 && (this._changesDetected || !this._emitDistinctChangesOnly))
-      this._changes.emit(this);
-  }
-  /** @internal */
-  onDirty(cb) {
-    this._onDirty = cb;
-  }
-  /** internal */
-  setDirty() {
-    this.dirty = true;
-    this._onDirty?.();
-  }
-  /** internal */
-  destroy() {
-    if (this._changes !== void 0) {
-      this._changes.complete();
-      this._changes.unsubscribe();
-    }
-  }
-};
-Symbol.iterator;
-var QueryList = _QueryList;
-var SKIP_HYDRATION_ATTR_NAME = "ngSkipHydration";
-var SKIP_HYDRATION_ATTR_NAME_LOWER_CASE = "ngskiphydration";
-function hasSkipHydrationAttrOnTNode(tNode) {
-  const attrs = tNode.mergedAttrs;
-  if (attrs === null)
-    return false;
-  for (let i = 0; i < attrs.length; i += 2) {
-    const value = attrs[i];
-    if (typeof value === "number")
-      return false;
-    if (typeof value === "string" && value.toLowerCase() === SKIP_HYDRATION_ATTR_NAME_LOWER_CASE) {
-      return true;
-    }
-  }
-  return false;
-}
-function hasSkipHydrationAttrOnRElement(rNode) {
-  return rNode.hasAttribute(SKIP_HYDRATION_ATTR_NAME);
-}
-function hasInSkipHydrationBlockFlag(tNode) {
-  return (tNode.flags & 128) === 128;
-}
-function isInSkipHydrationBlock(tNode) {
-  if (hasInSkipHydrationBlockFlag(tNode)) {
-    return true;
-  }
-  let currentTNode = tNode.parent;
-  while (currentTNode) {
-    if (hasInSkipHydrationBlockFlag(tNode) || hasSkipHydrationAttrOnTNode(currentTNode)) {
-      return true;
-    }
-    currentTNode = currentTNode.parent;
-  }
-  return false;
-}
-var DOCUMENT = void 0;
-function setDocument(document2) {
-  DOCUMENT = document2;
-}
-function getDocument() {
-  if (DOCUMENT !== void 0) {
-    return DOCUMENT;
-  } else if (typeof document !== "undefined") {
-    return document;
-  }
-  throw new RuntimeError(210, (typeof ngDevMode === "undefined" || ngDevMode) && `The document object is not available in this context. Make sure the DOCUMENT injection token is provided.`);
-}
-function ɵɵdefineInjectable(opts) {
-  return {
-    token: opts.token,
-    providedIn: opts.providedIn || null,
-    factory: opts.factory,
-    value: void 0
-  };
-}
-var defineInjectable = ɵɵdefineInjectable;
-function ɵɵdefineInjector(options) {
-  return { providers: options.providers || [], imports: options.imports || [] };
-}
-function getInjectableDef(type) {
-  return getOwnDefinition(type, NG_PROV_DEF) || getOwnDefinition(type, NG_INJECTABLE_DEF);
-}
-function isInjectable(type) {
-  return getInjectableDef(type) !== null;
-}
-function getOwnDefinition(type, field) {
-  return type.hasOwnProperty(field) ? type[field] : null;
-}
-function getInheritedInjectableDef(type) {
-  const def = type && (type[NG_PROV_DEF] || type[NG_INJECTABLE_DEF]);
-  if (def) {
-    ngDevMode && console.warn(`DEPRECATED: DI is instantiating a token "${type.name}" that inherits its @Injectable decorator but does not provide one itself.
-This will become an error in a future version of Angular. Please add @Injectable() to the "${type.name}" class.`);
-    return def;
-  } else {
-    return null;
-  }
-}
-function getInjectorDef(type) {
-  return type && (type.hasOwnProperty(NG_INJ_DEF) || type.hasOwnProperty(NG_INJECTOR_DEF)) ? type[NG_INJ_DEF] : null;
-}
-var NG_PROV_DEF = getClosureSafeProperty({ ɵprov: getClosureSafeProperty });
-var NG_INJ_DEF = getClosureSafeProperty({ ɵinj: getClosureSafeProperty });
-var NG_INJECTABLE_DEF = getClosureSafeProperty({ ngInjectableDef: getClosureSafeProperty });
-var NG_INJECTOR_DEF = getClosureSafeProperty({ ngInjectorDef: getClosureSafeProperty });
-var InjectionToken = class {
-  /**
-   * @param _desc   Description for the token,
-   *                used only for debugging purposes,
-   *                it should but does not need to be unique
-   * @param options Options for the token's usage, as described above
-   */
-  constructor(_desc, options) {
-    this._desc = _desc;
-    this.ngMetadataName = "InjectionToken";
-    this.ɵprov = void 0;
-    if (typeof options == "number") {
-      (typeof ngDevMode === "undefined" || ngDevMode) && assertLessThan(options, 0, "Only negative numbers are supported here");
-      this.__NG_ELEMENT_ID__ = options;
-    } else if (options !== void 0) {
-      this.ɵprov = ɵɵdefineInjectable({
-        token: this,
-        providedIn: options.providedIn || "root",
-        factory: options.factory
-      });
-    }
-  }
-  /**
-   * @internal
-   */
-  get multi() {
-    return this;
-  }
-  toString() {
-    return `InjectionToken ${this._desc}`;
-  }
-};
-var APP_ID = new InjectionToken(ngDevMode ? "AppId" : "", {
-  providedIn: "root",
-  factory: () => DEFAULT_APP_ID
-});
-var DEFAULT_APP_ID = "ng";
-var PLATFORM_INITIALIZER = new InjectionToken(ngDevMode ? "Platform Initializer" : "");
-var PLATFORM_ID = new InjectionToken(ngDevMode ? "Platform ID" : "", {
-  providedIn: "platform",
-  factory: () => "unknown"
-  // set a default platform name, when none set explicitly
-});
-var PACKAGE_ROOT_URL = new InjectionToken(ngDevMode ? "Application Packages Root URL" : "");
-var ANIMATION_MODULE_TYPE = new InjectionToken(ngDevMode ? "AnimationModuleType" : "");
-var CSP_NONCE = new InjectionToken(ngDevMode ? "CSP nonce" : "", {
-  providedIn: "root",
-  factory: () => {
-    return getDocument().body?.querySelector("[ngCspNonce]")?.getAttribute("ngCspNonce") || null;
-  }
-});
-var IMAGE_CONFIG_DEFAULTS = {
-  breakpoints: [16, 32, 48, 64, 96, 128, 256, 384, 640, 750, 828, 1080, 1200, 1920, 2048, 3840],
-  placeholderResolution: 30,
-  disableImageSizeWarning: false,
-  disableImageLazyLoadWarning: false
-};
-var IMAGE_CONFIG = new InjectionToken(ngDevMode ? "ImageConfig" : "", { providedIn: "root", factory: () => IMAGE_CONFIG_DEFAULTS });
-var __forward_ref__ = getClosureSafeProperty({ __forward_ref__: getClosureSafeProperty });
-function forwardRef(forwardRefFn) {
-  forwardRefFn.__forward_ref__ = forwardRef;
-  forwardRefFn.toString = function() {
-    return stringify(this());
-  };
-  return forwardRefFn;
-}
-function resolveForwardRef(type) {
-  return isForwardRef(type) ? type() : type;
-}
-function isForwardRef(fn) {
-  return typeof fn === "function" && fn.hasOwnProperty(__forward_ref__) && fn.__forward_ref__ === forwardRef;
-}
-var _injectorProfilerContext;
-function getInjectorProfilerContext() {
-  !ngDevMode && throwError2("getInjectorProfilerContext should never be called in production mode");
-  return _injectorProfilerContext;
-}
-function setInjectorProfilerContext(context2) {
-  !ngDevMode && throwError2("setInjectorProfilerContext should never be called in production mode");
-  const previous = _injectorProfilerContext;
-  _injectorProfilerContext = context2;
-  return previous;
-}
-var injectorProfilerCallback = null;
-var setInjectorProfiler = (injectorProfiler2) => {
-  !ngDevMode && throwError2("setInjectorProfiler should never be called in production mode");
-  injectorProfilerCallback = injectorProfiler2;
-};
-function injectorProfiler(event) {
-  !ngDevMode && throwError2("Injector profiler should never be called in production mode");
-  if (injectorProfilerCallback != null) {
-    injectorProfilerCallback(event);
-  }
-}
-function emitProviderConfiguredEvent(eventProvider, isViewProvider = false) {
-  !ngDevMode && throwError2("Injector profiler should never be called in production mode");
-  let token;
-  if (typeof eventProvider === "function") {
-    token = eventProvider;
-  } else if (eventProvider instanceof InjectionToken) {
-    token = eventProvider;
-  } else {
-    token = resolveForwardRef(eventProvider.provide);
-  }
-  let provider = eventProvider;
-  if (eventProvider instanceof InjectionToken) {
-    provider = eventProvider.ɵprov || eventProvider;
-  }
-  injectorProfiler({
-    type: 2,
-    context: getInjectorProfilerContext(),
-    providerRecord: { token, provider, isViewProvider }
-  });
-}
-function emitInstanceCreatedByInjectorEvent(instance) {
-  !ngDevMode && throwError2("Injector profiler should never be called in production mode");
-  injectorProfiler({
-    type: 1,
-    context: getInjectorProfilerContext(),
-    instance: { value: instance }
-  });
-}
-function emitInjectEvent(token, value, flags) {
-  !ngDevMode && throwError2("Injector profiler should never be called in production mode");
-  injectorProfiler({
-    type: 0,
-    context: getInjectorProfilerContext(),
-    service: { token, value, flags }
-  });
-}
-function runInInjectorProfilerContext(injector, token, callback) {
-  !ngDevMode && throwError2("runInInjectorProfilerContext should never be called in production mode");
-  const prevInjectContext = setInjectorProfilerContext({ injector, token });
-  try {
-    callback();
-  } finally {
-    setInjectorProfilerContext(prevInjectContext);
-  }
-}
-function isEnvironmentProviders(value) {
-  return value && !!value.ɵproviders;
-}
-function renderStringify(value) {
-  if (typeof value === "string")
-    return value;
-  if (value == null)
-    return "";
-  return String(value);
-}
-function stringifyForError(value) {
-  if (typeof value === "function")
-    return value.name || value.toString();
-  if (typeof value === "object" && value != null && typeof value.type === "function") {
-    return value.type.name || value.type.toString();
-  }
-  return renderStringify(value);
-}
-function debugStringifyTypeForError(type) {
-  let componentDef = type[NG_COMP_DEF] || null;
-  if (componentDef !== null && componentDef.debugInfo) {
-    return stringifyTypeFromDebugInfo(componentDef.debugInfo);
-  }
-  return stringifyForError(type);
-}
-function stringifyTypeFromDebugInfo(debugInfo) {
-  if (!debugInfo.filePath || !debugInfo.lineNumber) {
-    return debugInfo.className;
-  } else {
-    return `${debugInfo.className} (at ${debugInfo.filePath}:${debugInfo.lineNumber})`;
-  }
-}
-function throwCyclicDependencyError(token, path) {
-  const depPath = path ? `. Dependency path: ${path.join(" > ")} > ${token}` : "";
-  throw new RuntimeError(-200, ngDevMode ? `Circular dependency in DI detected for ${token}${depPath}` : token);
-}
-function throwMixedMultiProviderError() {
-  throw new Error(`Cannot mix multi providers and regular providers`);
-}
-function throwInvalidProviderError(ngModuleType, providers, provider) {
-  if (ngModuleType && providers) {
-    const providerDetail = providers.map((v) => v == provider ? "?" + provider + "?" : "...");
-    throw new Error(`Invalid provider for the NgModule '${stringify(ngModuleType)}' - only instances of Provider and Type are allowed, got: [${providerDetail.join(", ")}]`);
-  } else if (isEnvironmentProviders(provider)) {
-    if (provider.ɵfromNgModule) {
-      throw new RuntimeError(207, `Invalid providers from 'importProvidersFrom' present in a non-environment injector. 'importProvidersFrom' can't be used for component providers.`);
-    } else {
-      throw new RuntimeError(207, `Invalid providers present in a non-environment injector. 'EnvironmentProviders' can't be used for component providers.`);
-    }
-  } else {
-    throw new Error("Invalid provider");
-  }
-}
-function throwProviderNotFoundError(token, injectorName) {
-  const errorMessage = ngDevMode && `No provider for ${stringifyForError(token)} found${injectorName ? ` in ${injectorName}` : ""}`;
-  throw new RuntimeError(-201, errorMessage);
-}
-var _injectImplementation;
-function getInjectImplementation() {
-  return _injectImplementation;
-}
-function setInjectImplementation(impl) {
-  const previous = _injectImplementation;
-  _injectImplementation = impl;
-  return previous;
-}
-function injectRootLimpMode(token, notFoundValue, flags) {
-  const injectableDef = getInjectableDef(token);
-  if (injectableDef && injectableDef.providedIn == "root") {
-    return injectableDef.value === void 0 ? injectableDef.value = injectableDef.factory() : injectableDef.value;
-  }
-  if (flags & InjectFlags.Optional)
-    return null;
-  if (notFoundValue !== void 0)
-    return notFoundValue;
-  throwProviderNotFoundError(token, "Injector");
-}
-function assertInjectImplementationNotEqual(fn) {
-  ngDevMode && assertNotEqual(_injectImplementation, fn, "Calling ɵɵinject would cause infinite recursion");
-}
-var _THROW_IF_NOT_FOUND = {};
-var THROW_IF_NOT_FOUND = _THROW_IF_NOT_FOUND;
-var DI_DECORATOR_FLAG = "__NG_DI_FLAG__";
-var NG_TEMP_TOKEN_PATH = "ngTempTokenPath";
-var NG_TOKEN_PATH = "ngTokenPath";
-var NEW_LINE = /\n/gm;
-var NO_NEW_LINE = "ɵ";
-var SOURCE = "__source";
-var _currentInjector = void 0;
-function getCurrentInjector() {
-  return _currentInjector;
-}
-function setCurrentInjector(injector) {
-  const former = _currentInjector;
-  _currentInjector = injector;
-  return former;
-}
-function injectInjectorOnly(token, flags = InjectFlags.Default) {
-  if (_currentInjector === void 0) {
-    throw new RuntimeError(-203, ngDevMode && `inject() must be called from an injection context such as a constructor, a factory function, a field initializer, or a function used with \`runInInjectionContext\`.`);
-  } else if (_currentInjector === null) {
-    return injectRootLimpMode(token, void 0, flags);
-  } else {
-    const value = _currentInjector.get(token, flags & InjectFlags.Optional ? null : void 0, flags);
-    ngDevMode && emitInjectEvent(token, value, flags);
-    return value;
-  }
-}
-function ɵɵinject(token, flags = InjectFlags.Default) {
-  return (getInjectImplementation() || injectInjectorOnly)(resolveForwardRef(token), flags);
-}
-function ɵɵinvalidFactoryDep(index) {
-  throw new RuntimeError(202, ngDevMode && `This constructor is not compatible with Angular Dependency Injection because its dependency at index ${index} of the parameter list is invalid.
-This can happen if the dependency type is a primitive like a string or if an ancestor of this class is missing an Angular decorator.
-
-Please check that 1) the type for the parameter at index ${index} is correct and 2) the correct Angular decorators are defined for this class and its ancestors.`);
-}
-function inject(token, flags = InjectFlags.Default) {
-  return ɵɵinject(token, convertToBitFlags(flags));
-}
-function convertToBitFlags(flags) {
-  if (typeof flags === "undefined" || typeof flags === "number") {
-    return flags;
-  }
-  return 0 | // comment to force a line break in the formatter
-  (flags.optional && 8) | (flags.host && 1) | (flags.self && 2) | (flags.skipSelf && 4);
-}
-function injectArgs(types) {
-  const args = [];
-  for (let i = 0; i < types.length; i++) {
-    const arg = resolveForwardRef(types[i]);
-    if (Array.isArray(arg)) {
-      if (arg.length === 0) {
-        throw new RuntimeError(900, ngDevMode && "Arguments array must have arguments.");
-      }
-      let type = void 0;
-      let flags = InjectFlags.Default;
-      for (let j = 0; j < arg.length; j++) {
-        const meta = arg[j];
-        const flag = getInjectFlag(meta);
-        if (typeof flag === "number") {
-          if (flag === -1) {
-            type = meta.token;
-          } else {
-            flags |= flag;
-          }
-        } else {
-          type = meta;
-        }
-      }
-      args.push(ɵɵinject(type, flags));
-    } else {
-      args.push(ɵɵinject(arg));
-    }
-  }
-  return args;
-}
-function attachInjectFlag(decorator, flag) {
-  decorator[DI_DECORATOR_FLAG] = flag;
-  decorator.prototype[DI_DECORATOR_FLAG] = flag;
-  return decorator;
-}
-function getInjectFlag(token) {
-  return token[DI_DECORATOR_FLAG];
-}
-function catchInjectorError(e, token, injectorErrorName, source) {
-  const tokenPath = e[NG_TEMP_TOKEN_PATH];
-  if (token[SOURCE]) {
-    tokenPath.unshift(token[SOURCE]);
-  }
-  e.message = formatError("\n" + e.message, tokenPath, injectorErrorName, source);
-  e[NG_TOKEN_PATH] = tokenPath;
-  e[NG_TEMP_TOKEN_PATH] = null;
-  throw e;
-}
-function formatError(text, obj, injectorErrorName, source = null) {
-  text = text && text.charAt(0) === "\n" && text.charAt(1) == NO_NEW_LINE ? text.slice(2) : text;
-  let context2 = stringify(obj);
-  if (Array.isArray(obj)) {
-    context2 = obj.map(stringify).join(" -> ");
-  } else if (typeof obj === "object") {
-    let parts = [];
-    for (let key in obj) {
-      if (obj.hasOwnProperty(key)) {
-        let value = obj[key];
-        parts.push(key + ":" + (typeof value === "string" ? JSON.stringify(value) : stringify(value)));
-      }
-    }
-    context2 = `{${parts.join(", ")}}`;
-  }
-  return `${injectorErrorName}${source ? "(" + source + ")" : ""}[${context2}]: ${text.replace(NEW_LINE, "\n  ")}`;
-}
-function makeStateKey(key) {
-  return key;
-}
-function initTransferState() {
-  const transferState = new TransferState();
-  if (inject(PLATFORM_ID) === "browser") {
-    transferState.store = retrieveTransferredState(getDocument(), inject(APP_ID));
-  }
-  return transferState;
-}
-var _TransferState = class _TransferState {
-  constructor() {
-    this.store = {};
-    this.onSerializeCallbacks = {};
-  }
-  /**
-   * Get the value corresponding to a key. Return `defaultValue` if key is not found.
-   */
-  get(key, defaultValue) {
-    return this.store[key] !== void 0 ? this.store[key] : defaultValue;
-  }
-  /**
-   * Set the value corresponding to a key.
-   */
-  set(key, value) {
-    this.store[key] = value;
-  }
-  /**
-   * Remove a key from the store.
-   */
-  remove(key) {
-    delete this.store[key];
-  }
-  /**
-   * Test whether a key exists in the store.
-   */
-  hasKey(key) {
-    return this.store.hasOwnProperty(key);
-  }
-  /**
-   * Indicates whether the state is empty.
-   */
-  get isEmpty() {
-    return Object.keys(this.store).length === 0;
-  }
-  /**
-   * Register a callback to provide the value for a key when `toJson` is called.
-   */
-  onSerialize(key, callback) {
-    this.onSerializeCallbacks[key] = callback;
-  }
-  /**
-   * Serialize the current state of the store to JSON.
-   */
-  toJson() {
-    for (const key in this.onSerializeCallbacks) {
-      if (this.onSerializeCallbacks.hasOwnProperty(key)) {
-        try {
-          this.store[key] = this.onSerializeCallbacks[key]();
-        } catch (e) {
-          console.warn("Exception in onSerialize callback: ", e);
-        }
-      }
-    }
-    return JSON.stringify(this.store).replace(/</g, "\\u003C");
-  }
-};
-_TransferState.ɵprov = /** @pureOrBreakMyCode */
-ɵɵdefineInjectable({
-  token: _TransferState,
-  providedIn: "root",
-  factory: initTransferState
-});
-var TransferState = _TransferState;
-function retrieveTransferredState(doc, appId) {
-  const script = doc.getElementById(appId + "-state");
-  if (script?.textContent) {
-    try {
-      return JSON.parse(script.textContent);
-    } catch (e) {
-      console.warn("Exception while restoring TransferState for app " + appId, e);
-    }
-  }
-  return {};
-}
-var REFERENCE_NODE_HOST = "h";
-var REFERENCE_NODE_BODY = "b";
-var NodeNavigationStep;
-(function(NodeNavigationStep2) {
-  NodeNavigationStep2["FirstChild"] = "f";
-  NodeNavigationStep2["NextSibling"] = "n";
-})(NodeNavigationStep || (NodeNavigationStep = {}));
-var ELEMENT_CONTAINERS = "e";
-var TEMPLATES = "t";
-var CONTAINERS = "c";
-var MULTIPLIER = "x";
-var NUM_ROOT_NODES = "r";
-var TEMPLATE_ID = "i";
-var NODES = "n";
-var DISCONNECTED_NODES = "d";
-var TRANSFER_STATE_TOKEN_ID = "__nghData__";
-var NGH_DATA_KEY = makeStateKey(TRANSFER_STATE_TOKEN_ID);
-var NGH_ATTR_NAME = "ngh";
-var SSR_CONTENT_INTEGRITY_MARKER = "nghm";
-var _retrieveHydrationInfoImpl = () => null;
-function retrieveHydrationInfoImpl(rNode, injector, isRootView2 = false) {
-  let nghAttrValue = rNode.getAttribute(NGH_ATTR_NAME);
-  if (nghAttrValue == null)
-    return null;
-  const [componentViewNgh, rootViewNgh] = nghAttrValue.split("|");
-  nghAttrValue = isRootView2 ? rootViewNgh : componentViewNgh;
-  if (!nghAttrValue)
-    return null;
-  const rootNgh = rootViewNgh ? `|${rootViewNgh}` : "";
-  const remainingNgh = isRootView2 ? componentViewNgh : rootNgh;
-  let data = {};
-  if (nghAttrValue !== "") {
-    const transferState = injector.get(TransferState, null, { optional: true });
-    if (transferState !== null) {
-      const nghData = transferState.get(NGH_DATA_KEY, []);
-      data = nghData[Number(nghAttrValue)];
-      ngDevMode && assertDefined(data, "Unable to retrieve hydration info from the TransferState.");
-    }
-  }
-  const dehydratedView = {
-    data,
-    firstChild: rNode.firstChild ?? null
-  };
-  if (isRootView2) {
-    dehydratedView.firstChild = rNode;
-    setSegmentHead(dehydratedView, 0, rNode.nextSibling);
-  }
-  if (remainingNgh) {
-    rNode.setAttribute(NGH_ATTR_NAME, remainingNgh);
-  } else {
-    rNode.removeAttribute(NGH_ATTR_NAME);
-  }
-  ngDevMode && markRNodeAsClaimedByHydration(
-    rNode,
-    /* checkIfAlreadyClaimed */
-    false
-  );
-  ngDevMode && ngDevMode.hydratedComponents++;
-  return dehydratedView;
-}
-function enableRetrieveHydrationInfoImpl() {
-  _retrieveHydrationInfoImpl = retrieveHydrationInfoImpl;
-}
-function retrieveHydrationInfo(rNode, injector, isRootView2 = false) {
-  return _retrieveHydrationInfoImpl(rNode, injector, isRootView2);
-}
-function getLNodeForHydration(viewRef) {
-  let lView = viewRef._lView;
-  const tView = lView[TVIEW];
-  if (tView.type === 2) {
-    return null;
-  }
-  if (isRootView(lView)) {
-    lView = lView[HEADER_OFFSET];
-  }
-  return lView;
-}
-function getTextNodeContent(node) {
-  return node.textContent?.replace(/\s/gm, "");
-}
-function processTextNodeMarkersBeforeHydration(node) {
-  const doc = getDocument();
-  const commentNodesIterator = doc.createNodeIterator(node, NodeFilter.SHOW_COMMENT, {
-    acceptNode(node2) {
-      const content = getTextNodeContent(node2);
-      const isTextNodeMarker = content === "ngetn" || content === "ngtns";
-      return isTextNodeMarker ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
-    }
-  });
-  let currentNode;
-  const nodes = [];
-  while (currentNode = commentNodesIterator.nextNode()) {
-    nodes.push(currentNode);
-  }
-  for (const node2 of nodes) {
-    if (node2.textContent === "ngetn") {
-      node2.replaceWith(doc.createTextNode(""));
-    } else {
-      node2.remove();
-    }
-  }
-}
-var HydrationStatus;
-(function(HydrationStatus2) {
-  HydrationStatus2["Hydrated"] = "hydrated";
-  HydrationStatus2["Skipped"] = "skipped";
-  HydrationStatus2["Mismatched"] = "mismatched";
-})(HydrationStatus || (HydrationStatus = {}));
-var HYDRATION_INFO_KEY = "__ngDebugHydrationInfo__";
-function patchHydrationInfo(node, info) {
-  node[HYDRATION_INFO_KEY] = info;
-}
-function readHydrationInfo(node) {
-  return node[HYDRATION_INFO_KEY] ?? null;
-}
-function markRNodeAsClaimedByHydration(node, checkIfAlreadyClaimed = true) {
-  if (!ngDevMode) {
-    throw new Error("Calling `markRNodeAsClaimedByHydration` in prod mode is not supported and likely a mistake.");
-  }
-  if (checkIfAlreadyClaimed && isRNodeClaimedForHydration(node)) {
-    throw new Error("Trying to claim a node, which was claimed already.");
-  }
-  patchHydrationInfo(node, { status: HydrationStatus.Hydrated });
-  ngDevMode.hydratedNodes++;
-}
-function markRNodeAsSkippedByHydration(node) {
-  if (!ngDevMode) {
-    throw new Error("Calling `markRNodeAsSkippedByHydration` in prod mode is not supported and likely a mistake.");
-  }
-  patchHydrationInfo(node, { status: HydrationStatus.Skipped });
-  ngDevMode.componentsSkippedHydration++;
-}
-function markRNodeAsHavingHydrationMismatch(node, expectedNodeDetails = null, actualNodeDetails = null) {
-  if (!ngDevMode) {
-    throw new Error("Calling `markRNodeAsMismatchedByHydration` in prod mode is not supported and likely a mistake.");
-  }
-  while (node && readHydrationInfo(node)?.status !== HydrationStatus.Hydrated) {
-    node = node?.parentNode;
-  }
-  if (node) {
-    patchHydrationInfo(node, {
-      status: HydrationStatus.Mismatched,
-      expectedNodeDetails,
-      actualNodeDetails
-    });
-  }
-}
-function isRNodeClaimedForHydration(node) {
-  return readHydrationInfo(node)?.status === HydrationStatus.Hydrated;
-}
-function setSegmentHead(hydrationInfo, index, node) {
-  hydrationInfo.segmentHeads ??= {};
-  hydrationInfo.segmentHeads[index] = node;
-}
-function getSegmentHead(hydrationInfo, index) {
-  return hydrationInfo.segmentHeads?.[index] ?? null;
-}
-function getNgContainerSize(hydrationInfo, index) {
-  const data = hydrationInfo.data;
-  let size = data[ELEMENT_CONTAINERS]?.[index] ?? null;
-  if (size === null && data[CONTAINERS]?.[index]) {
-    size = calcSerializedContainerSize(hydrationInfo, index);
-  }
-  return size;
-}
-function getSerializedContainerViews(hydrationInfo, index) {
-  return hydrationInfo.data[CONTAINERS]?.[index] ?? null;
-}
-function calcSerializedContainerSize(hydrationInfo, index) {
-  const views = getSerializedContainerViews(hydrationInfo, index) ?? [];
-  let numNodes = 0;
-  for (let view of views) {
-    numNodes += view[NUM_ROOT_NODES] * (view[MULTIPLIER] ?? 1);
-  }
-  return numNodes;
-}
-function isDisconnectedNode$1(hydrationInfo, index) {
-  if (typeof hydrationInfo.disconnectedNodes === "undefined") {
-    const nodeIds = hydrationInfo.data[DISCONNECTED_NODES];
-    hydrationInfo.disconnectedNodes = nodeIds ? new Set(nodeIds) : null;
-  }
-  return !!hydrationInfo.disconnectedNodes?.has(index);
-}
-var ANNOTATIONS = "__annotations__";
-var PARAMETERS = "__parameters__";
-var PROP_METADATA = "__prop__metadata__";
-function makeDecorator(name, props, parentClass, additionalProcessing, typeFn) {
-  return noSideEffects(() => {
-    const metaCtor = makeMetadataCtor(props);
-    function DecoratorFactory(...args) {
-      if (this instanceof DecoratorFactory) {
-        metaCtor.call(this, ...args);
-        return this;
-      }
-      const annotationInstance = new DecoratorFactory(...args);
-      return function TypeDecorator(cls) {
-        if (typeFn)
-          typeFn(cls, ...args);
-        const annotations = cls.hasOwnProperty(ANNOTATIONS) ? cls[ANNOTATIONS] : Object.defineProperty(cls, ANNOTATIONS, { value: [] })[ANNOTATIONS];
-        annotations.push(annotationInstance);
-        if (additionalProcessing)
-          additionalProcessing(cls);
-        return cls;
-      };
-    }
-    if (parentClass) {
-      DecoratorFactory.prototype = Object.create(parentClass.prototype);
-    }
-    DecoratorFactory.prototype.ngMetadataName = name;
-    DecoratorFactory.annotationCls = DecoratorFactory;
-    return DecoratorFactory;
-  });
-}
-function makeMetadataCtor(props) {
-  return function ctor(...args) {
-    if (props) {
-      const values = props(...args);
-      for (const propName in values) {
-        this[propName] = values[propName];
-      }
-    }
-  };
-}
-function makeParamDecorator(name, props, parentClass) {
-  return noSideEffects(() => {
-    const metaCtor = makeMetadataCtor(props);
-    function ParamDecoratorFactory(...args) {
-      if (this instanceof ParamDecoratorFactory) {
-        metaCtor.apply(this, args);
-        return this;
-      }
-      const annotationInstance = new ParamDecoratorFactory(...args);
-      ParamDecorator.annotation = annotationInstance;
-      return ParamDecorator;
-      function ParamDecorator(cls, unusedKey, index) {
-        const parameters = cls.hasOwnProperty(PARAMETERS) ? cls[PARAMETERS] : Object.defineProperty(cls, PARAMETERS, { value: [] })[PARAMETERS];
-        while (parameters.length <= index) {
-          parameters.push(null);
-        }
-        (parameters[index] = parameters[index] || []).push(annotationInstance);
-        return cls;
-      }
-    }
-    if (parentClass) {
-      ParamDecoratorFactory.prototype = Object.create(parentClass.prototype);
-    }
-    ParamDecoratorFactory.prototype.ngMetadataName = name;
-    ParamDecoratorFactory.annotationCls = ParamDecoratorFactory;
-    return ParamDecoratorFactory;
-  });
-}
-function makePropDecorator(name, props, parentClass, additionalProcessing) {
-  return noSideEffects(() => {
-    const metaCtor = makeMetadataCtor(props);
-    function PropDecoratorFactory(...args) {
-      if (this instanceof PropDecoratorFactory) {
-        metaCtor.apply(this, args);
-        return this;
-      }
-      const decoratorInstance = new PropDecoratorFactory(...args);
-      function PropDecorator(target, name2) {
-        if (target === void 0) {
-          throw new Error("Standard Angular field decorators are not supported in JIT mode.");
-        }
-        const constructor = target.constructor;
-        const meta = constructor.hasOwnProperty(PROP_METADATA) ? constructor[PROP_METADATA] : Object.defineProperty(constructor, PROP_METADATA, { value: {} })[PROP_METADATA];
-        meta[name2] = meta.hasOwnProperty(name2) && meta[name2] || [];
-        meta[name2].unshift(decoratorInstance);
-        if (additionalProcessing)
-          additionalProcessing(target, name2, ...args);
-      }
-      return PropDecorator;
-    }
-    if (parentClass) {
-      PropDecoratorFactory.prototype = Object.create(parentClass.prototype);
-    }
-    PropDecoratorFactory.prototype.ngMetadataName = name;
-    PropDecoratorFactory.annotationCls = PropDecoratorFactory;
-    return PropDecoratorFactory;
-  });
-}
-var Inject = attachInjectFlag(
-  // Disable tslint because `DecoratorFlags` is a const enum which gets inlined.
-  // tslint:disable-next-line: no-toplevel-property-access
-  makeParamDecorator("Inject", (token) => ({ token })),
-  -1
-  /* DecoratorFlags.Inject */
-);
-var Optional = (
-  // Disable tslint because `InternalInjectFlags` is a const enum which gets inlined.
-  // tslint:disable-next-line: no-toplevel-property-access
-  attachInjectFlag(
-    makeParamDecorator("Optional"),
-    8
-    /* InternalInjectFlags.Optional */
-  )
-);
-var Self = (
-  // Disable tslint because `InternalInjectFlags` is a const enum which gets inlined.
-  // tslint:disable-next-line: no-toplevel-property-access
-  attachInjectFlag(
-    makeParamDecorator("Self"),
-    2
-    /* InternalInjectFlags.Self */
-  )
-);
-var SkipSelf = (
-  // Disable tslint because `InternalInjectFlags` is a const enum which gets inlined.
-  // tslint:disable-next-line: no-toplevel-property-access
-  attachInjectFlag(
-    makeParamDecorator("SkipSelf"),
-    4
-    /* InternalInjectFlags.SkipSelf */
-  )
-);
-var Host = (
-  // Disable tslint because `InternalInjectFlags` is a const enum which gets inlined.
-  // tslint:disable-next-line: no-toplevel-property-access
-  attachInjectFlag(
-    makeParamDecorator("Host"),
-    1
-    /* InternalInjectFlags.Host */
-  )
-);
-function getFactoryDef(type, throwNotFound) {
-  const hasFactoryDef = type.hasOwnProperty(NG_FACTORY_DEF);
-  if (!hasFactoryDef && throwNotFound === true && ngDevMode) {
-    throw new Error(`Type ${stringify(type)} does not have 'ɵfac' property.`);
-  }
-  return hasFactoryDef ? type[NG_FACTORY_DEF] : null;
-}
-var ENVIRONMENT_INITIALIZER = new InjectionToken(ngDevMode ? "ENVIRONMENT_INITIALIZER" : "");
-var INJECTOR = new InjectionToken(
-  ngDevMode ? "INJECTOR" : "",
-  // Disable tslint because this is const enum which gets inlined not top level prop access.
-  // tslint:disable-next-line: no-toplevel-property-access
-  -1
-  /* InjectorMarkers.Injector */
-);
-var INJECTOR_DEF_TYPES = new InjectionToken(ngDevMode ? "INJECTOR_DEF_TYPES" : "");
-var NullInjector = class {
-  get(token, notFoundValue = THROW_IF_NOT_FOUND) {
-    if (notFoundValue === THROW_IF_NOT_FOUND) {
-      const error = new Error(`NullInjectorError: No provider for ${stringify(token)}!`);
-      error.name = "NullInjectorError";
-      throw error;
-    }
-    return notFoundValue;
-  }
-};
-function makeEnvironmentProviders(providers) {
-  return {
-    ɵproviders: providers
-  };
-}
-function importProvidersFrom(...sources) {
-  return {
-    ɵproviders: internalImportProvidersFrom(true, sources),
-    ɵfromNgModule: true
-  };
-}
-function internalImportProvidersFrom(checkForStandaloneCmp, ...sources) {
-  const providersOut = [];
-  const dedup = /* @__PURE__ */ new Set();
-  let injectorTypesWithProviders;
-  const collectProviders = (provider) => {
-    providersOut.push(provider);
-  };
-  deepForEach(sources, (source) => {
-    if ((typeof ngDevMode === "undefined" || ngDevMode) && checkForStandaloneCmp) {
-      const cmpDef = getComponentDef(source);
-      if (cmpDef?.standalone) {
-        throw new RuntimeError(800, `Importing providers supports NgModule or ModuleWithProviders but got a standalone component "${stringifyForError(source)}"`);
-      }
-    }
-    const internalSource = source;
-    if (walkProviderTree(internalSource, collectProviders, [], dedup)) {
-      injectorTypesWithProviders ||= [];
-      injectorTypesWithProviders.push(internalSource);
-    }
-  });
-  if (injectorTypesWithProviders !== void 0) {
-    processInjectorTypesWithProviders(injectorTypesWithProviders, collectProviders);
-  }
-  return providersOut;
-}
-function processInjectorTypesWithProviders(typesWithProviders, visitor) {
-  for (let i = 0; i < typesWithProviders.length; i++) {
-    const { ngModule, providers } = typesWithProviders[i];
-    deepForEachProvider(providers, (provider) => {
-      ngDevMode && validateProvider(provider, providers || EMPTY_ARRAY, ngModule);
-      visitor(provider, ngModule);
-    });
-  }
-}
-function walkProviderTree(container, visitor, parents, dedup) {
-  container = resolveForwardRef(container);
-  if (!container)
-    return false;
-  let defType = null;
-  let injDef = getInjectorDef(container);
-  const cmpDef = !injDef && getComponentDef(container);
-  if (!injDef && !cmpDef) {
-    const ngModule = container.ngModule;
-    injDef = getInjectorDef(ngModule);
-    if (injDef) {
-      defType = ngModule;
-    } else {
-      return false;
-    }
-  } else if (cmpDef && !cmpDef.standalone) {
-    return false;
-  } else {
-    defType = container;
-  }
-  if (ngDevMode && parents.indexOf(defType) !== -1) {
-    const defName = stringify(defType);
-    const path = parents.map(stringify);
-    throwCyclicDependencyError(defName, path);
-  }
-  const isDuplicate = dedup.has(defType);
-  if (cmpDef) {
-    if (isDuplicate) {
-      return false;
-    }
-    dedup.add(defType);
-    if (cmpDef.dependencies) {
-      const deps = typeof cmpDef.dependencies === "function" ? cmpDef.dependencies() : cmpDef.dependencies;
-      for (const dep of deps) {
-        walkProviderTree(dep, visitor, parents, dedup);
-      }
-    }
-  } else if (injDef) {
-    if (injDef.imports != null && !isDuplicate) {
-      ngDevMode && parents.push(defType);
-      dedup.add(defType);
-      let importTypesWithProviders;
-      try {
-        deepForEach(injDef.imports, (imported) => {
-          if (walkProviderTree(imported, visitor, parents, dedup)) {
-            importTypesWithProviders ||= [];
-            importTypesWithProviders.push(imported);
-          }
-        });
-      } finally {
-        ngDevMode && parents.pop();
-      }
-      if (importTypesWithProviders !== void 0) {
-        processInjectorTypesWithProviders(importTypesWithProviders, visitor);
-      }
-    }
-    if (!isDuplicate) {
-      const factory = getFactoryDef(defType) || (() => new defType());
-      visitor({ provide: defType, useFactory: factory, deps: EMPTY_ARRAY }, defType);
-      visitor({ provide: INJECTOR_DEF_TYPES, useValue: defType, multi: true }, defType);
-      visitor({ provide: ENVIRONMENT_INITIALIZER, useValue: () => ɵɵinject(defType), multi: true }, defType);
-    }
-    const defProviders = injDef.providers;
-    if (defProviders != null && !isDuplicate) {
-      const injectorType = container;
-      deepForEachProvider(defProviders, (provider) => {
-        ngDevMode && validateProvider(provider, defProviders, injectorType);
-        visitor(provider, injectorType);
-      });
-    }
-  } else {
-    return false;
-  }
-  return defType !== container && container.providers !== void 0;
-}
-function validateProvider(provider, providers, containerType) {
-  if (isTypeProvider(provider) || isValueProvider(provider) || isFactoryProvider(provider) || isExistingProvider(provider)) {
-    return;
-  }
-  const classRef = resolveForwardRef(provider && (provider.useClass || provider.provide));
-  if (!classRef) {
-    throwInvalidProviderError(containerType, providers, provider);
-  }
-}
-function deepForEachProvider(providers, fn) {
-  for (let provider of providers) {
-    if (isEnvironmentProviders(provider)) {
-      provider = provider.ɵproviders;
-    }
-    if (Array.isArray(provider)) {
-      deepForEachProvider(provider, fn);
-    } else {
-      fn(provider);
-    }
-  }
-}
-var USE_VALUE$1 = getClosureSafeProperty({ provide: String, useValue: getClosureSafeProperty });
-function isValueProvider(value) {
-  return value !== null && typeof value == "object" && USE_VALUE$1 in value;
-}
-function isExistingProvider(value) {
-  return !!(value && value.useExisting);
-}
-function isFactoryProvider(value) {
-  return !!(value && value.useFactory);
-}
-function isTypeProvider(value) {
-  return typeof value === "function";
-}
-function isClassProvider(value) {
-  return !!value.useClass;
-}
-var INJECTOR_SCOPE = new InjectionToken(ngDevMode ? "Set Injector scope." : "");
-var NOT_YET = {};
-var CIRCULAR = {};
-var NULL_INJECTOR = void 0;
-function getNullInjector() {
-  if (NULL_INJECTOR === void 0) {
-    NULL_INJECTOR = new NullInjector();
-  }
-  return NULL_INJECTOR;
-}
-var EnvironmentInjector = class {
-};
-var R3Injector = class extends EnvironmentInjector {
-  /**
-   * Flag indicating that this injector was previously destroyed.
-   */
-  get destroyed() {
-    return this._destroyed;
-  }
-  constructor(providers, parent, source, scopes) {
-    super();
-    this.parent = parent;
-    this.source = source;
-    this.scopes = scopes;
-    this.records = /* @__PURE__ */ new Map();
-    this._ngOnDestroyHooks = /* @__PURE__ */ new Set();
-    this._onDestroyHooks = [];
-    this._destroyed = false;
-    forEachSingleProvider(providers, (provider) => this.processProvider(provider));
-    this.records.set(INJECTOR, makeRecord(void 0, this));
-    if (scopes.has("environment")) {
-      this.records.set(EnvironmentInjector, makeRecord(void 0, this));
-    }
-    const record = this.records.get(INJECTOR_SCOPE);
-    if (record != null && typeof record.value === "string") {
-      this.scopes.add(record.value);
-    }
-    this.injectorDefTypes = new Set(this.get(INJECTOR_DEF_TYPES, EMPTY_ARRAY, InjectFlags.Self));
-  }
-  /**
-   * Destroy the injector and release references to every instance or provider associated with it.
-   *
-   * Also calls the `OnDestroy` lifecycle hooks of every instance that was created for which a
-   * hook was found.
-   */
-  destroy() {
-    this.assertNotDestroyed();
-    this._destroyed = true;
-    try {
-      for (const service of this._ngOnDestroyHooks) {
-        service.ngOnDestroy();
-      }
-      const onDestroyHooks = this._onDestroyHooks;
-      this._onDestroyHooks = [];
-      for (const hook of onDestroyHooks) {
-        hook();
-      }
-    } finally {
-      this.records.clear();
-      this._ngOnDestroyHooks.clear();
-      this.injectorDefTypes.clear();
-    }
-  }
-  onDestroy(callback) {
-    this.assertNotDestroyed();
-    this._onDestroyHooks.push(callback);
-    return () => this.removeOnDestroy(callback);
-  }
-  runInContext(fn) {
-    this.assertNotDestroyed();
-    const previousInjector = setCurrentInjector(this);
-    const previousInjectImplementation = setInjectImplementation(void 0);
-    let prevInjectContext;
-    if (ngDevMode) {
-      prevInjectContext = setInjectorProfilerContext({ injector: this, token: null });
-    }
-    try {
-      return fn();
-    } finally {
-      setCurrentInjector(previousInjector);
-      setInjectImplementation(previousInjectImplementation);
-      ngDevMode && setInjectorProfilerContext(prevInjectContext);
-    }
-  }
-  get(token, notFoundValue = THROW_IF_NOT_FOUND, flags = InjectFlags.Default) {
-    this.assertNotDestroyed();
-    if (token.hasOwnProperty(NG_ENV_ID)) {
-      return token[NG_ENV_ID](this);
-    }
-    flags = convertToBitFlags(flags);
-    let prevInjectContext;
-    if (ngDevMode) {
-      prevInjectContext = setInjectorProfilerContext({ injector: this, token });
-    }
-    const previousInjector = setCurrentInjector(this);
-    const previousInjectImplementation = setInjectImplementation(void 0);
-    try {
-      if (!(flags & InjectFlags.SkipSelf)) {
-        let record = this.records.get(token);
-        if (record === void 0) {
-          const def = couldBeInjectableType(token) && getInjectableDef(token);
-          if (def && this.injectableDefInScope(def)) {
-            if (ngDevMode) {
-              runInInjectorProfilerContext(this, token, () => {
-                emitProviderConfiguredEvent(token);
-              });
-            }
-            record = makeRecord(injectableDefOrInjectorDefFactory(token), NOT_YET);
-          } else {
-            record = null;
-          }
-          this.records.set(token, record);
-        }
-        if (record != null) {
-          return this.hydrate(token, record);
-        }
-      }
-      const nextInjector = !(flags & InjectFlags.Self) ? this.parent : getNullInjector();
-      notFoundValue = flags & InjectFlags.Optional && notFoundValue === THROW_IF_NOT_FOUND ? null : notFoundValue;
-      return nextInjector.get(token, notFoundValue);
-    } catch (e) {
-      if (e.name === "NullInjectorError") {
-        const path = e[NG_TEMP_TOKEN_PATH] = e[NG_TEMP_TOKEN_PATH] || [];
-        path.unshift(stringify(token));
-        if (previousInjector) {
-          throw e;
-        } else {
-          return catchInjectorError(e, token, "R3InjectorError", this.source);
-        }
-      } else {
-        throw e;
-      }
-    } finally {
-      setInjectImplementation(previousInjectImplementation);
-      setCurrentInjector(previousInjector);
-      ngDevMode && setInjectorProfilerContext(prevInjectContext);
-    }
-  }
-  /** @internal */
-  resolveInjectorInitializers() {
-    const previousInjector = setCurrentInjector(this);
-    const previousInjectImplementation = setInjectImplementation(void 0);
-    let prevInjectContext;
-    if (ngDevMode) {
-      prevInjectContext = setInjectorProfilerContext({ injector: this, token: null });
-    }
-    try {
-      const initializers = this.get(ENVIRONMENT_INITIALIZER, EMPTY_ARRAY, InjectFlags.Self);
-      if (ngDevMode && !Array.isArray(initializers)) {
-        throw new RuntimeError(-209, `Unexpected type of the \`ENVIRONMENT_INITIALIZER\` token value (expected an array, but got ${typeof initializers}). Please check that the \`ENVIRONMENT_INITIALIZER\` token is configured as a \`multi: true\` provider.`);
-      }
-      for (const initializer of initializers) {
-        initializer();
-      }
-    } finally {
-      setCurrentInjector(previousInjector);
-      setInjectImplementation(previousInjectImplementation);
-      ngDevMode && setInjectorProfilerContext(prevInjectContext);
-    }
-  }
-  toString() {
-    const tokens = [];
-    const records = this.records;
-    for (const token of records.keys()) {
-      tokens.push(stringify(token));
-    }
-    return `R3Injector[${tokens.join(", ")}]`;
-  }
-  assertNotDestroyed() {
-    if (this._destroyed) {
-      throw new RuntimeError(205, ngDevMode && "Injector has already been destroyed.");
-    }
-  }
-  /**
-   * Process a `SingleProvider` and add it.
-   */
-  processProvider(provider) {
-    provider = resolveForwardRef(provider);
-    let token = isTypeProvider(provider) ? provider : resolveForwardRef(provider && provider.provide);
-    const record = providerToRecord(provider);
-    if (ngDevMode) {
-      runInInjectorProfilerContext(this, token, () => {
-        if (isValueProvider(provider)) {
-          emitInstanceCreatedByInjectorEvent(provider.useValue);
-        }
-        emitProviderConfiguredEvent(provider);
-      });
-    }
-    if (!isTypeProvider(provider) && provider.multi === true) {
-      let multiRecord = this.records.get(token);
-      if (multiRecord) {
-        if (ngDevMode && multiRecord.multi === void 0) {
-          throwMixedMultiProviderError();
-        }
-      } else {
-        multiRecord = makeRecord(void 0, NOT_YET, true);
-        multiRecord.factory = () => injectArgs(multiRecord.multi);
-        this.records.set(token, multiRecord);
-      }
-      token = provider;
-      multiRecord.multi.push(provider);
-    } else {
-      if (ngDevMode) {
-        const existing = this.records.get(token);
-        if (existing && existing.multi !== void 0) {
-          throwMixedMultiProviderError();
-        }
-      }
-    }
-    this.records.set(token, record);
-  }
-  hydrate(token, record) {
-    if (ngDevMode && record.value === CIRCULAR) {
-      throwCyclicDependencyError(stringify(token));
-    } else if (record.value === NOT_YET) {
-      record.value = CIRCULAR;
-      if (ngDevMode) {
-        runInInjectorProfilerContext(this, token, () => {
-          record.value = record.factory();
-          emitInstanceCreatedByInjectorEvent(record.value);
-        });
-      } else {
-        record.value = record.factory();
-      }
-    }
-    if (typeof record.value === "object" && record.value && hasOnDestroy(record.value)) {
-      this._ngOnDestroyHooks.add(record.value);
-    }
-    return record.value;
-  }
-  injectableDefInScope(def) {
-    if (!def.providedIn) {
-      return false;
-    }
-    const providedIn = resolveForwardRef(def.providedIn);
-    if (typeof providedIn === "string") {
-      return providedIn === "any" || this.scopes.has(providedIn);
-    } else {
-      return this.injectorDefTypes.has(providedIn);
-    }
-  }
-  removeOnDestroy(callback) {
-    const destroyCBIdx = this._onDestroyHooks.indexOf(callback);
-    if (destroyCBIdx !== -1) {
-      this._onDestroyHooks.splice(destroyCBIdx, 1);
-    }
-  }
-};
-function injectableDefOrInjectorDefFactory(token) {
-  const injectableDef = getInjectableDef(token);
-  const factory = injectableDef !== null ? injectableDef.factory : getFactoryDef(token);
-  if (factory !== null) {
-    return factory;
-  }
-  if (token instanceof InjectionToken) {
-    throw new RuntimeError(204, ngDevMode && `Token ${stringify(token)} is missing a ɵprov definition.`);
-  }
-  if (token instanceof Function) {
-    return getUndecoratedInjectableFactory(token);
-  }
-  throw new RuntimeError(204, ngDevMode && "unreachable");
-}
-function getUndecoratedInjectableFactory(token) {
-  const paramLength = token.length;
-  if (paramLength > 0) {
-    throw new RuntimeError(204, ngDevMode && `Can't resolve all parameters for ${stringify(token)}: (${newArray(paramLength, "?").join(", ")}).`);
-  }
-  const inheritedInjectableDef = getInheritedInjectableDef(token);
-  if (inheritedInjectableDef !== null) {
-    return () => inheritedInjectableDef.factory(token);
-  } else {
-    return () => new token();
-  }
-}
-function providerToRecord(provider) {
-  if (isValueProvider(provider)) {
-    return makeRecord(void 0, provider.useValue);
-  } else {
-    const factory = providerToFactory(provider);
-    return makeRecord(factory, NOT_YET);
-  }
-}
-function providerToFactory(provider, ngModuleType, providers) {
-  let factory = void 0;
-  if (ngDevMode && isEnvironmentProviders(provider)) {
-    throwInvalidProviderError(void 0, providers, provider);
-  }
-  if (isTypeProvider(provider)) {
-    const unwrappedProvider = resolveForwardRef(provider);
-    return getFactoryDef(unwrappedProvider) || injectableDefOrInjectorDefFactory(unwrappedProvider);
-  } else {
-    if (isValueProvider(provider)) {
-      factory = () => resolveForwardRef(provider.useValue);
-    } else if (isFactoryProvider(provider)) {
-      factory = () => provider.useFactory(...injectArgs(provider.deps || []));
-    } else if (isExistingProvider(provider)) {
-      factory = () => ɵɵinject(resolveForwardRef(provider.useExisting));
-    } else {
-      const classRef = resolveForwardRef(provider && (provider.useClass || provider.provide));
-      if (ngDevMode && !classRef) {
-        throwInvalidProviderError(ngModuleType, providers, provider);
-      }
-      if (hasDeps(provider)) {
-        factory = () => new classRef(...injectArgs(provider.deps));
-      } else {
-        return getFactoryDef(classRef) || injectableDefOrInjectorDefFactory(classRef);
-      }
-    }
-  }
-  return factory;
-}
-function makeRecord(factory, value, multi = false) {
-  return {
-    factory,
-    value,
-    multi: multi ? [] : void 0
-  };
-}
-function hasDeps(value) {
-  return !!value.deps;
-}
-function hasOnDestroy(value) {
-  return value !== null && typeof value === "object" && typeof value.ngOnDestroy === "function";
-}
-function couldBeInjectableType(value) {
-  return typeof value === "function" || typeof value === "object" && value instanceof InjectionToken;
-}
-function forEachSingleProvider(providers, fn) {
-  for (const provider of providers) {
-    if (Array.isArray(provider)) {
-      forEachSingleProvider(provider, fn);
-    } else if (provider && isEnvironmentProviders(provider)) {
-      forEachSingleProvider(provider.ɵproviders, fn);
-    } else {
-      fn(provider);
-    }
-  }
-}
-function runInInjectionContext(injector, fn) {
-  if (injector instanceof R3Injector) {
-    injector.assertNotDestroyed();
-  }
-  let prevInjectorProfilerContext;
-  if (ngDevMode) {
-    prevInjectorProfilerContext = setInjectorProfilerContext({ injector, token: null });
-  }
-  const prevInjector = setCurrentInjector(injector);
-  const previousInjectImplementation = setInjectImplementation(void 0);
-  try {
-    return fn();
-  } finally {
-    setCurrentInjector(prevInjector);
-    ngDevMode && setInjectorProfilerContext(prevInjectorProfilerContext);
-    setInjectImplementation(previousInjectImplementation);
-  }
-}
-function assertInInjectionContext(debugFn) {
-  if (!getInjectImplementation() && !getCurrentInjector()) {
-    throw new RuntimeError(-203, ngDevMode && debugFn.name + "() can only be used within an injection context such as a constructor, a factory function, a field initializer, or a function used with `runInInjectionContext`");
-  }
-}
-var FactoryTarget;
-(function(FactoryTarget2) {
-  FactoryTarget2[FactoryTarget2["Directive"] = 0] = "Directive";
-  FactoryTarget2[FactoryTarget2["Component"] = 1] = "Component";
-  FactoryTarget2[FactoryTarget2["Injectable"] = 2] = "Injectable";
-  FactoryTarget2[FactoryTarget2["Pipe"] = 3] = "Pipe";
-  FactoryTarget2[FactoryTarget2["NgModule"] = 4] = "NgModule";
-})(FactoryTarget || (FactoryTarget = {}));
-var R3TemplateDependencyKind;
-(function(R3TemplateDependencyKind2) {
-  R3TemplateDependencyKind2[R3TemplateDependencyKind2["Directive"] = 0] = "Directive";
-  R3TemplateDependencyKind2[R3TemplateDependencyKind2["Pipe"] = 1] = "Pipe";
-  R3TemplateDependencyKind2[R3TemplateDependencyKind2["NgModule"] = 2] = "NgModule";
-})(R3TemplateDependencyKind || (R3TemplateDependencyKind = {}));
-var ViewEncapsulation;
-(function(ViewEncapsulation2) {
-  ViewEncapsulation2[ViewEncapsulation2["Emulated"] = 0] = "Emulated";
-  ViewEncapsulation2[ViewEncapsulation2["None"] = 2] = "None";
-  ViewEncapsulation2[ViewEncapsulation2["ShadowDom"] = 3] = "ShadowDom";
-})(ViewEncapsulation || (ViewEncapsulation = {}));
-function getCompilerFacade(request) {
-  const globalNg = _global["ng"];
-  if (globalNg && globalNg.ɵcompilerFacade) {
-    return globalNg.ɵcompilerFacade;
-  }
-  if (typeof ngDevMode === "undefined" || ngDevMode) {
-    console.error(`JIT compilation failed for ${request.kind}`, request.type);
-    let message = `The ${request.kind} '${request.type.name}' needs to be compiled using the JIT compiler, but '@angular/compiler' is not available.
-
-`;
-    if (request.usage === 1) {
-      message += `The ${request.kind} is part of a library that has been partially compiled.
-`;
-      message += `However, the Angular Linker has not processed the library such that JIT compilation is used as fallback.
-`;
-      message += "\n";
-      message += `Ideally, the library is processed using the Angular Linker to become fully AOT compiled.
-`;
-    } else {
-      message += `JIT compilation is discouraged for production use-cases! Consider using AOT mode instead.
-`;
-    }
-    message += `Alternatively, the JIT compiler should be loaded by bootstrapping using '@angular/platform-browser-dynamic' or '@angular/platform-server',
-`;
-    message += `or manually provide the compiler with 'import "@angular/compiler";' before bootstrapping.`;
-    throw new Error(message);
-  } else {
-    throw new Error("JIT compiler unavailable");
-  }
-}
-var angularCoreDiEnv = {
-  "ɵɵdefineInjectable": ɵɵdefineInjectable,
-  "ɵɵdefineInjector": ɵɵdefineInjector,
-  "ɵɵinject": ɵɵinject,
-  "ɵɵinvalidFactoryDep": ɵɵinvalidFactoryDep,
-  "resolveForwardRef": resolveForwardRef
-};
-var Type = Function;
-function isType(v) {
-  return typeof v === "function";
-}
-var ES5_DELEGATE_CTOR = /^function\s+\S+\(\)\s*{[\s\S]+\.apply\(this,\s*(arguments|(?:[^()]+\(\[\],)?[^()]+\(arguments\).*)\)/;
-var ES2015_INHERITED_CLASS = /^class\s+[A-Za-z\d$_]*\s*extends\s+[^{]+{/;
-var ES2015_INHERITED_CLASS_WITH_CTOR = /^class\s+[A-Za-z\d$_]*\s*extends\s+[^{]+{[\s\S]*constructor\s*\(/;
-var ES2015_INHERITED_CLASS_WITH_DELEGATE_CTOR = /^class\s+[A-Za-z\d$_]*\s*extends\s+[^{]+{[\s\S]*constructor\s*\(\)\s*{[^}]*super\(\.\.\.arguments\)/;
-function isDelegateCtor(typeStr) {
-  return ES5_DELEGATE_CTOR.test(typeStr) || ES2015_INHERITED_CLASS_WITH_DELEGATE_CTOR.test(typeStr) || ES2015_INHERITED_CLASS.test(typeStr) && !ES2015_INHERITED_CLASS_WITH_CTOR.test(typeStr);
-}
-var ReflectionCapabilities = class {
-  constructor(reflect) {
-    this._reflect = reflect || _global["Reflect"];
-  }
-  factory(t) {
-    return (...args) => new t(...args);
-  }
-  /** @internal */
-  _zipTypesAndAnnotations(paramTypes, paramAnnotations) {
-    let result;
-    if (typeof paramTypes === "undefined") {
-      result = newArray(paramAnnotations.length);
-    } else {
-      result = newArray(paramTypes.length);
-    }
-    for (let i = 0; i < result.length; i++) {
-      if (typeof paramTypes === "undefined") {
-        result[i] = [];
-      } else if (paramTypes[i] && paramTypes[i] != Object) {
-        result[i] = [paramTypes[i]];
-      } else {
-        result[i] = [];
-      }
-      if (paramAnnotations && paramAnnotations[i] != null) {
-        result[i] = result[i].concat(paramAnnotations[i]);
-      }
-    }
-    return result;
-  }
-  _ownParameters(type, parentCtor) {
-    const typeStr = type.toString();
-    if (isDelegateCtor(typeStr)) {
-      return null;
-    }
-    if (type.parameters && type.parameters !== parentCtor.parameters) {
-      return type.parameters;
-    }
-    const tsickleCtorParams = type.ctorParameters;
-    if (tsickleCtorParams && tsickleCtorParams !== parentCtor.ctorParameters) {
-      const ctorParameters = typeof tsickleCtorParams === "function" ? tsickleCtorParams() : tsickleCtorParams;
-      const paramTypes2 = ctorParameters.map((ctorParam) => ctorParam && ctorParam.type);
-      const paramAnnotations2 = ctorParameters.map((ctorParam) => ctorParam && convertTsickleDecoratorIntoMetadata(ctorParam.decorators));
-      return this._zipTypesAndAnnotations(paramTypes2, paramAnnotations2);
-    }
-    const paramAnnotations = type.hasOwnProperty(PARAMETERS) && type[PARAMETERS];
-    const paramTypes = this._reflect && this._reflect.getOwnMetadata && this._reflect.getOwnMetadata("design:paramtypes", type);
-    if (paramTypes || paramAnnotations) {
-      return this._zipTypesAndAnnotations(paramTypes, paramAnnotations);
-    }
-    return newArray(type.length);
-  }
-  parameters(type) {
-    if (!isType(type)) {
-      return [];
-    }
-    const parentCtor = getParentCtor(type);
-    let parameters = this._ownParameters(type, parentCtor);
-    if (!parameters && parentCtor !== Object) {
-      parameters = this.parameters(parentCtor);
-    }
-    return parameters || [];
-  }
-  _ownAnnotations(typeOrFunc, parentCtor) {
-    if (typeOrFunc.annotations && typeOrFunc.annotations !== parentCtor.annotations) {
-      let annotations = typeOrFunc.annotations;
-      if (typeof annotations === "function" && annotations.annotations) {
-        annotations = annotations.annotations;
-      }
-      return annotations;
-    }
-    if (typeOrFunc.decorators && typeOrFunc.decorators !== parentCtor.decorators) {
-      return convertTsickleDecoratorIntoMetadata(typeOrFunc.decorators);
-    }
-    if (typeOrFunc.hasOwnProperty(ANNOTATIONS)) {
-      return typeOrFunc[ANNOTATIONS];
-    }
-    return null;
-  }
-  annotations(typeOrFunc) {
-    if (!isType(typeOrFunc)) {
-      return [];
-    }
-    const parentCtor = getParentCtor(typeOrFunc);
-    const ownAnnotations = this._ownAnnotations(typeOrFunc, parentCtor) || [];
-    const parentAnnotations = parentCtor !== Object ? this.annotations(parentCtor) : [];
-    return parentAnnotations.concat(ownAnnotations);
-  }
-  _ownPropMetadata(typeOrFunc, parentCtor) {
-    if (typeOrFunc.propMetadata && typeOrFunc.propMetadata !== parentCtor.propMetadata) {
-      let propMetadata = typeOrFunc.propMetadata;
-      if (typeof propMetadata === "function" && propMetadata.propMetadata) {
-        propMetadata = propMetadata.propMetadata;
-      }
-      return propMetadata;
-    }
-    if (typeOrFunc.propDecorators && typeOrFunc.propDecorators !== parentCtor.propDecorators) {
-      const propDecorators = typeOrFunc.propDecorators;
-      const propMetadata = {};
-      Object.keys(propDecorators).forEach((prop) => {
-        propMetadata[prop] = convertTsickleDecoratorIntoMetadata(propDecorators[prop]);
-      });
-      return propMetadata;
-    }
-    if (typeOrFunc.hasOwnProperty(PROP_METADATA)) {
-      return typeOrFunc[PROP_METADATA];
-    }
-    return null;
-  }
-  propMetadata(typeOrFunc) {
-    if (!isType(typeOrFunc)) {
-      return {};
-    }
-    const parentCtor = getParentCtor(typeOrFunc);
-    const propMetadata = {};
-    if (parentCtor !== Object) {
-      const parentPropMetadata = this.propMetadata(parentCtor);
-      Object.keys(parentPropMetadata).forEach((propName) => {
-        propMetadata[propName] = parentPropMetadata[propName];
-      });
-    }
-    const ownPropMetadata = this._ownPropMetadata(typeOrFunc, parentCtor);
-    if (ownPropMetadata) {
-      Object.keys(ownPropMetadata).forEach((propName) => {
-        const decorators = [];
-        if (propMetadata.hasOwnProperty(propName)) {
-          decorators.push(...propMetadata[propName]);
-        }
-        decorators.push(...ownPropMetadata[propName]);
-        propMetadata[propName] = decorators;
-      });
-    }
-    return propMetadata;
-  }
-  ownPropMetadata(typeOrFunc) {
-    if (!isType(typeOrFunc)) {
-      return {};
-    }
-    return this._ownPropMetadata(typeOrFunc, getParentCtor(typeOrFunc)) || {};
-  }
-  hasLifecycleHook(type, lcProperty) {
-    return type instanceof Type && lcProperty in type.prototype;
-  }
-};
-function convertTsickleDecoratorIntoMetadata(decoratorInvocations) {
-  if (!decoratorInvocations) {
-    return [];
-  }
-  return decoratorInvocations.map((decoratorInvocation) => {
-    const decoratorType = decoratorInvocation.type;
-    const annotationCls = decoratorType.annotationCls;
-    const annotationArgs = decoratorInvocation.args ? decoratorInvocation.args : [];
-    return new annotationCls(...annotationArgs);
-  });
-}
-function getParentCtor(ctor) {
-  const parentProto = ctor.prototype ? Object.getPrototypeOf(ctor.prototype) : null;
-  const parentCtor = parentProto ? parentProto.constructor : null;
-  return parentCtor || Object;
-}
-var SimpleChange = class {
-  constructor(previousValue, currentValue, firstChange) {
-    this.previousValue = previousValue;
-    this.currentValue = currentValue;
-    this.firstChange = firstChange;
-  }
-  /**
-   * Check whether the new value is the first value assigned.
-   */
-  isFirstChange() {
-    return this.firstChange;
-  }
-};
-function applyValueToInputField(instance, inputSignalNode, privateName, value) {
-  if (inputSignalNode !== null) {
-    inputSignalNode.applyValueToInputSignal(inputSignalNode, value);
-  } else {
-    instance[privateName] = value;
-  }
-}
-function ɵɵNgOnChangesFeature() {
-  return NgOnChangesFeatureImpl;
-}
-function NgOnChangesFeatureImpl(definition) {
-  if (definition.type.prototype.ngOnChanges) {
-    definition.setInput = ngOnChangesSetInput;
-  }
-  return rememberChangeHistoryAndInvokeOnChangesHook;
-}
-ɵɵNgOnChangesFeature.ngInherit = true;
-function rememberChangeHistoryAndInvokeOnChangesHook() {
-  const simpleChangesStore = getSimpleChangesStore(this);
-  const current = simpleChangesStore?.current;
-  if (current) {
-    const previous = simpleChangesStore.previous;
-    if (previous === EMPTY_OBJ) {
-      simpleChangesStore.previous = current;
-    } else {
-      for (let key in current) {
-        previous[key] = current[key];
-      }
-    }
-    simpleChangesStore.current = null;
-    this.ngOnChanges(current);
-  }
-}
-function ngOnChangesSetInput(instance, inputSignalNode, value, publicName, privateName) {
-  const declaredName = this.declaredInputs[publicName];
-  ngDevMode && assertString(declaredName, "Name of input in ngOnChanges has to be a string");
-  const simpleChangesStore = getSimpleChangesStore(instance) || setSimpleChangesStore(instance, { previous: EMPTY_OBJ, current: null });
-  const current = simpleChangesStore.current || (simpleChangesStore.current = {});
-  const previous = simpleChangesStore.previous;
-  const previousChange = previous[declaredName];
-  current[declaredName] = new SimpleChange(previousChange && previousChange.currentValue, value, previous === EMPTY_OBJ);
-  applyValueToInputField(instance, inputSignalNode, privateName, value);
-}
-var SIMPLE_CHANGES_STORE = "__ngSimpleChanges__";
-function getSimpleChangesStore(instance) {
-  return instance[SIMPLE_CHANGES_STORE] || null;
-}
-function setSimpleChangesStore(instance, store2) {
-  return instance[SIMPLE_CHANGES_STORE] = store2;
-}
-var profilerCallback = null;
-var setProfiler = (profiler2) => {
-  profilerCallback = profiler2;
-};
-var profiler = function(event, instance, hookOrListener) {
-  if (profilerCallback != null) {
-    profilerCallback(event, instance, hookOrListener);
-  }
-};
 function registerPreOrderHooks(directiveIndex, directiveDef, tView) {
   ngDevMode && assertFirstCreatePass(tView);
   const { ngOnChanges, ngOnInit, ngDoCheck } = directiveDef.type.prototype;
@@ -7442,7 +6917,7 @@ function lookupTokenUsingModuleInjector(lView, token, flags, notFoundValue) {
     notFoundValue = null;
   }
   if ((flags & (InjectFlags.Self | InjectFlags.Host)) === 0) {
-    const moduleInjector = lView[INJECTOR$1];
+    const moduleInjector = lView[INJECTOR];
     const previousInjectImplementation = setInjectImplementation(void 0);
     try {
       if (moduleInjector) {
@@ -7901,10 +7376,19 @@ _Injector.NULL = new NullInjector();
 _Injector.ɵprov = ɵɵdefineInjectable({
   token: _Injector,
   providedIn: "any",
-  factory: () => ɵɵinject(INJECTOR)
+  factory: () => ɵɵinject(INJECTOR$1)
 });
 _Injector.__NG_ELEMENT_ID__ = -1;
 var Injector = _Injector;
+var HostAttributeToken = class {
+  constructor(attributeName) {
+    this.attributeName = attributeName;
+    this.__NG_ELEMENT_ID__ = () => ɵɵinjectAttribute(this.attributeName);
+  }
+  toString() {
+    return `HostAttributeToken ${this.attributeName}`;
+  }
+};
 var ERROR_ORIGINAL_ERROR = "ngOriginalError";
 function getOriginalError(error) {
   return error[ERROR_ORIGINAL_ERROR];
@@ -7936,12 +7420,633 @@ var INTERNAL_APPLICATION_ERROR_HANDLER = new InjectionToken(typeof ngDevMode ===
     return userErrorHandler.handleError.bind(void 0);
   }
 });
+var _DestroyRef = class _DestroyRef {
+};
+_DestroyRef.__NG_ELEMENT_ID__ = injectDestroyRef;
+_DestroyRef.__NG_ENV_ID__ = (injector) => injector;
+var DestroyRef = _DestroyRef;
+var NodeInjectorDestroyRef = class extends DestroyRef {
+  constructor(_lView) {
+    super();
+    this._lView = _lView;
+  }
+  onDestroy(callback) {
+    storeLViewOnDestroy(this._lView, callback);
+    return () => removeLViewOnDestroy(this._lView, callback);
+  }
+};
+function injectDestroyRef() {
+  return new NodeInjectorDestroyRef(getLView());
+}
+var OutputEmitterRef = class {
+  constructor() {
+    this.destroyed = false;
+    this.listeners = null;
+    this.errorHandler = inject(ErrorHandler, { optional: true });
+    this.destroyRef = inject(DestroyRef);
+    this.destroyRef.onDestroy(() => {
+      this.destroyed = true;
+      this.listeners = null;
+    });
+  }
+  subscribe(callback) {
+    if (this.destroyed) {
+      throw new RuntimeError(953, ngDevMode && "Unexpected subscription to destroyed `OutputRef`. The owning directive/component is destroyed.");
+    }
+    (this.listeners ??= []).push(callback);
+    return {
+      unsubscribe: () => {
+        const idx = this.listeners?.indexOf(callback);
+        if (idx !== void 0 && idx !== -1) {
+          this.listeners?.splice(idx, 1);
+        }
+      }
+    };
+  }
+  /** Emits a new value to the output. */
+  emit(value) {
+    if (this.destroyed) {
+      throw new RuntimeError(953, ngDevMode && "Unexpected emit for destroyed `OutputRef`. The owning directive/component is destroyed.");
+    }
+    if (this.listeners === null) {
+      return;
+    }
+    const previousConsumer = setActiveConsumer(null);
+    try {
+      for (const listenerFn of this.listeners) {
+        try {
+          listenerFn(value);
+        } catch (err) {
+          this.errorHandler?.handleError(err);
+        }
+      }
+    } finally {
+      setActiveConsumer(previousConsumer);
+    }
+  }
+};
+function getOutputDestroyRef(ref) {
+  return ref.destroyRef;
+}
+function output(opts) {
+  ngDevMode && assertInInjectionContext(output);
+  return new OutputEmitterRef();
+}
+function inputFunction(initialValue, opts) {
+  ngDevMode && assertInInjectionContext(input);
+  return createInputSignal(initialValue, opts);
+}
+function inputRequiredFunction(opts) {
+  ngDevMode && assertInInjectionContext(input);
+  return createInputSignal(REQUIRED_UNSET_VALUE, opts);
+}
+var input = (() => {
+  inputFunction.required = inputRequiredFunction;
+  return inputFunction;
+})();
+function injectElementRef() {
+  return createElementRef(getCurrentTNode(), getLView());
+}
+function createElementRef(tNode, lView) {
+  return new ElementRef(getNativeByTNode(tNode, lView));
+}
+var _ElementRef = class _ElementRef {
+  constructor(nativeElement) {
+    this.nativeElement = nativeElement;
+  }
+};
+_ElementRef.__NG_ELEMENT_ID__ = injectElementRef;
+var ElementRef = _ElementRef;
+function unwrapElementRef(value) {
+  return value instanceof ElementRef ? value.nativeElement : value;
+}
+var EventEmitter_ = class extends Subject {
+  constructor(isAsync = false) {
+    super();
+    this.destroyRef = void 0;
+    this.__isAsync = isAsync;
+    if (isInInjectionContext()) {
+      this.destroyRef = inject(DestroyRef, { optional: true }) ?? void 0;
+    }
+  }
+  emit(value) {
+    const prevConsumer = setActiveConsumer(null);
+    try {
+      super.next(value);
+    } finally {
+      setActiveConsumer(prevConsumer);
+    }
+  }
+  subscribe(observerOrNext, error, complete) {
+    let nextFn = observerOrNext;
+    let errorFn = error || (() => null);
+    let completeFn = complete;
+    if (observerOrNext && typeof observerOrNext === "object") {
+      const observer = observerOrNext;
+      nextFn = observer.next?.bind(observer);
+      errorFn = observer.error?.bind(observer);
+      completeFn = observer.complete?.bind(observer);
+    }
+    if (this.__isAsync) {
+      errorFn = _wrapInTimeout(errorFn);
+      if (nextFn) {
+        nextFn = _wrapInTimeout(nextFn);
+      }
+      if (completeFn) {
+        completeFn = _wrapInTimeout(completeFn);
+      }
+    }
+    const sink = super.subscribe({ next: nextFn, error: errorFn, complete: completeFn });
+    if (observerOrNext instanceof Subscription) {
+      observerOrNext.add(sink);
+    }
+    return sink;
+  }
+};
+function _wrapInTimeout(fn) {
+  return (value) => {
+    setTimeout(fn, void 0, value);
+  };
+}
+var EventEmitter = EventEmitter_;
+function symbolIterator() {
+  return this._results[Symbol.iterator]();
+}
+var _QueryList = class _QueryList {
+  /**
+   * Returns `Observable` of `QueryList` notifying the subscriber of changes.
+   */
+  get changes() {
+    return this._changes ??= new EventEmitter();
+  }
+  /**
+   * @param emitDistinctChangesOnly Whether `QueryList.changes` should fire only when actual change
+   *     has occurred. Or if it should fire when query is recomputed. (recomputing could resolve in
+   *     the same result)
+   */
+  constructor(_emitDistinctChangesOnly = false) {
+    this._emitDistinctChangesOnly = _emitDistinctChangesOnly;
+    this.dirty = true;
+    this._onDirty = void 0;
+    this._results = [];
+    this._changesDetected = false;
+    this._changes = void 0;
+    this.length = 0;
+    this.first = void 0;
+    this.last = void 0;
+    const proto = _QueryList.prototype;
+    if (!proto[Symbol.iterator])
+      proto[Symbol.iterator] = symbolIterator;
+  }
+  /**
+   * Returns the QueryList entry at `index`.
+   */
+  get(index) {
+    return this._results[index];
+  }
+  /**
+   * See
+   * [Array.map](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/map)
+   */
+  map(fn) {
+    return this._results.map(fn);
+  }
+  filter(fn) {
+    return this._results.filter(fn);
+  }
+  /**
+   * See
+   * [Array.find](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/find)
+   */
+  find(fn) {
+    return this._results.find(fn);
+  }
+  /**
+   * See
+   * [Array.reduce](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/reduce)
+   */
+  reduce(fn, init) {
+    return this._results.reduce(fn, init);
+  }
+  /**
+   * See
+   * [Array.forEach](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/forEach)
+   */
+  forEach(fn) {
+    this._results.forEach(fn);
+  }
+  /**
+   * See
+   * [Array.some](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/some)
+   */
+  some(fn) {
+    return this._results.some(fn);
+  }
+  /**
+   * Returns a copy of the internal results list as an Array.
+   */
+  toArray() {
+    return this._results.slice();
+  }
+  toString() {
+    return this._results.toString();
+  }
+  /**
+   * Updates the stored data of the query list, and resets the `dirty` flag to `false`, so that
+   * on change detection, it will not notify of changes to the queries, unless a new change
+   * occurs.
+   *
+   * @param resultsTree The query results to store
+   * @param identityAccessor Optional function for extracting stable object identity from a value
+   *    in the array. This function is executed for each element of the query result list while
+   *    comparing current query list with the new one (provided as a first argument of the `reset`
+   *    function) to detect if the lists are different. If the function is not provided, elements
+   *    are compared as is (without any pre-processing).
+   */
+  reset(resultsTree, identityAccessor) {
+    this.dirty = false;
+    const newResultFlat = flatten(resultsTree);
+    if (this._changesDetected = !arrayEquals(this._results, newResultFlat, identityAccessor)) {
+      this._results = newResultFlat;
+      this.length = newResultFlat.length;
+      this.last = newResultFlat[this.length - 1];
+      this.first = newResultFlat[0];
+    }
+  }
+  /**
+   * Triggers a change event by emitting on the `changes` {@link EventEmitter}.
+   */
+  notifyOnChanges() {
+    if (this._changes !== void 0 && (this._changesDetected || !this._emitDistinctChangesOnly))
+      this._changes.emit(this);
+  }
+  /** @internal */
+  onDirty(cb) {
+    this._onDirty = cb;
+  }
+  /** internal */
+  setDirty() {
+    this.dirty = true;
+    this._onDirty?.();
+  }
+  /** internal */
+  destroy() {
+    if (this._changes !== void 0) {
+      this._changes.complete();
+      this._changes.unsubscribe();
+    }
+  }
+};
+Symbol.iterator;
+var QueryList = _QueryList;
+var SKIP_HYDRATION_ATTR_NAME = "ngSkipHydration";
+var SKIP_HYDRATION_ATTR_NAME_LOWER_CASE = "ngskiphydration";
+function hasSkipHydrationAttrOnTNode(tNode) {
+  const attrs = tNode.mergedAttrs;
+  if (attrs === null)
+    return false;
+  for (let i = 0; i < attrs.length; i += 2) {
+    const value = attrs[i];
+    if (typeof value === "number")
+      return false;
+    if (typeof value === "string" && value.toLowerCase() === SKIP_HYDRATION_ATTR_NAME_LOWER_CASE) {
+      return true;
+    }
+  }
+  return false;
+}
+function hasSkipHydrationAttrOnRElement(rNode) {
+  return rNode.hasAttribute(SKIP_HYDRATION_ATTR_NAME);
+}
+function hasInSkipHydrationBlockFlag(tNode) {
+  return (tNode.flags & 128) === 128;
+}
+function isInSkipHydrationBlock(tNode) {
+  if (hasInSkipHydrationBlockFlag(tNode)) {
+    return true;
+  }
+  let currentTNode = tNode.parent;
+  while (currentTNode) {
+    if (hasInSkipHydrationBlockFlag(tNode) || hasSkipHydrationAttrOnTNode(currentTNode)) {
+      return true;
+    }
+    currentTNode = currentTNode.parent;
+  }
+  return false;
+}
+var DOCUMENT = void 0;
+function setDocument(document2) {
+  DOCUMENT = document2;
+}
+function getDocument() {
+  if (DOCUMENT !== void 0) {
+    return DOCUMENT;
+  } else if (typeof document !== "undefined") {
+    return document;
+  }
+  throw new RuntimeError(210, (typeof ngDevMode === "undefined" || ngDevMode) && `The document object is not available in this context. Make sure the DOCUMENT injection token is provided.`);
+}
+var APP_ID = new InjectionToken(ngDevMode ? "AppId" : "", {
+  providedIn: "root",
+  factory: () => DEFAULT_APP_ID
+});
+var DEFAULT_APP_ID = "ng";
+var PLATFORM_INITIALIZER = new InjectionToken(ngDevMode ? "Platform Initializer" : "");
+var PLATFORM_ID = new InjectionToken(ngDevMode ? "Platform ID" : "", {
+  providedIn: "platform",
+  factory: () => "unknown"
+  // set a default platform name, when none set explicitly
+});
+var PACKAGE_ROOT_URL = new InjectionToken(ngDevMode ? "Application Packages Root URL" : "");
+var ANIMATION_MODULE_TYPE = new InjectionToken(ngDevMode ? "AnimationModuleType" : "");
+var CSP_NONCE = new InjectionToken(ngDevMode ? "CSP nonce" : "", {
+  providedIn: "root",
+  factory: () => {
+    return getDocument().body?.querySelector("[ngCspNonce]")?.getAttribute("ngCspNonce") || null;
+  }
+});
+var IMAGE_CONFIG_DEFAULTS = {
+  breakpoints: [16, 32, 48, 64, 96, 128, 256, 384, 640, 750, 828, 1080, 1200, 1920, 2048, 3840],
+  placeholderResolution: 30,
+  disableImageSizeWarning: false,
+  disableImageLazyLoadWarning: false
+};
+var IMAGE_CONFIG = new InjectionToken(ngDevMode ? "ImageConfig" : "", { providedIn: "root", factory: () => IMAGE_CONFIG_DEFAULTS });
+function makeStateKey(key) {
+  return key;
+}
+function initTransferState() {
+  const transferState = new TransferState();
+  if (inject(PLATFORM_ID) === "browser") {
+    transferState.store = retrieveTransferredState(getDocument(), inject(APP_ID));
+  }
+  return transferState;
+}
+var _TransferState = class _TransferState {
+  constructor() {
+    this.store = {};
+    this.onSerializeCallbacks = {};
+  }
+  /**
+   * Get the value corresponding to a key. Return `defaultValue` if key is not found.
+   */
+  get(key, defaultValue) {
+    return this.store[key] !== void 0 ? this.store[key] : defaultValue;
+  }
+  /**
+   * Set the value corresponding to a key.
+   */
+  set(key, value) {
+    this.store[key] = value;
+  }
+  /**
+   * Remove a key from the store.
+   */
+  remove(key) {
+    delete this.store[key];
+  }
+  /**
+   * Test whether a key exists in the store.
+   */
+  hasKey(key) {
+    return this.store.hasOwnProperty(key);
+  }
+  /**
+   * Indicates whether the state is empty.
+   */
+  get isEmpty() {
+    return Object.keys(this.store).length === 0;
+  }
+  /**
+   * Register a callback to provide the value for a key when `toJson` is called.
+   */
+  onSerialize(key, callback) {
+    this.onSerializeCallbacks[key] = callback;
+  }
+  /**
+   * Serialize the current state of the store to JSON.
+   */
+  toJson() {
+    for (const key in this.onSerializeCallbacks) {
+      if (this.onSerializeCallbacks.hasOwnProperty(key)) {
+        try {
+          this.store[key] = this.onSerializeCallbacks[key]();
+        } catch (e) {
+          console.warn("Exception in onSerialize callback: ", e);
+        }
+      }
+    }
+    return JSON.stringify(this.store).replace(/</g, "\\u003C");
+  }
+};
+_TransferState.ɵprov = /** @pureOrBreakMyCode */
+ɵɵdefineInjectable({
+  token: _TransferState,
+  providedIn: "root",
+  factory: initTransferState
+});
+var TransferState = _TransferState;
+function retrieveTransferredState(doc, appId) {
+  const script = doc.getElementById(appId + "-state");
+  if (script?.textContent) {
+    try {
+      return JSON.parse(script.textContent);
+    } catch (e) {
+      console.warn("Exception while restoring TransferState for app " + appId, e);
+    }
+  }
+  return {};
+}
+var REFERENCE_NODE_HOST = "h";
+var REFERENCE_NODE_BODY = "b";
+var NodeNavigationStep;
+(function(NodeNavigationStep2) {
+  NodeNavigationStep2["FirstChild"] = "f";
+  NodeNavigationStep2["NextSibling"] = "n";
+})(NodeNavigationStep || (NodeNavigationStep = {}));
+var ELEMENT_CONTAINERS = "e";
+var TEMPLATES = "t";
+var CONTAINERS = "c";
+var MULTIPLIER = "x";
+var NUM_ROOT_NODES = "r";
+var TEMPLATE_ID = "i";
+var NODES = "n";
+var DISCONNECTED_NODES = "d";
+var TRANSFER_STATE_TOKEN_ID = "__nghData__";
+var NGH_DATA_KEY = makeStateKey(TRANSFER_STATE_TOKEN_ID);
+var NGH_ATTR_NAME = "ngh";
+var SSR_CONTENT_INTEGRITY_MARKER = "nghm";
+var _retrieveHydrationInfoImpl = () => null;
+function retrieveHydrationInfoImpl(rNode, injector, isRootView2 = false) {
+  let nghAttrValue = rNode.getAttribute(NGH_ATTR_NAME);
+  if (nghAttrValue == null)
+    return null;
+  const [componentViewNgh, rootViewNgh] = nghAttrValue.split("|");
+  nghAttrValue = isRootView2 ? rootViewNgh : componentViewNgh;
+  if (!nghAttrValue)
+    return null;
+  const rootNgh = rootViewNgh ? `|${rootViewNgh}` : "";
+  const remainingNgh = isRootView2 ? componentViewNgh : rootNgh;
+  let data = {};
+  if (nghAttrValue !== "") {
+    const transferState = injector.get(TransferState, null, { optional: true });
+    if (transferState !== null) {
+      const nghData = transferState.get(NGH_DATA_KEY, []);
+      data = nghData[Number(nghAttrValue)];
+      ngDevMode && assertDefined(data, "Unable to retrieve hydration info from the TransferState.");
+    }
+  }
+  const dehydratedView = {
+    data,
+    firstChild: rNode.firstChild ?? null
+  };
+  if (isRootView2) {
+    dehydratedView.firstChild = rNode;
+    setSegmentHead(dehydratedView, 0, rNode.nextSibling);
+  }
+  if (remainingNgh) {
+    rNode.setAttribute(NGH_ATTR_NAME, remainingNgh);
+  } else {
+    rNode.removeAttribute(NGH_ATTR_NAME);
+  }
+  ngDevMode && markRNodeAsClaimedByHydration(
+    rNode,
+    /* checkIfAlreadyClaimed */
+    false
+  );
+  ngDevMode && ngDevMode.hydratedComponents++;
+  return dehydratedView;
+}
+function enableRetrieveHydrationInfoImpl() {
+  _retrieveHydrationInfoImpl = retrieveHydrationInfoImpl;
+}
+function retrieveHydrationInfo(rNode, injector, isRootView2 = false) {
+  return _retrieveHydrationInfoImpl(rNode, injector, isRootView2);
+}
+function getLNodeForHydration(viewRef) {
+  let lView = viewRef._lView;
+  const tView = lView[TVIEW];
+  if (tView.type === 2) {
+    return null;
+  }
+  if (isRootView(lView)) {
+    lView = lView[HEADER_OFFSET];
+  }
+  return lView;
+}
+function getTextNodeContent(node) {
+  return node.textContent?.replace(/\s/gm, "");
+}
+function processTextNodeMarkersBeforeHydration(node) {
+  const doc = getDocument();
+  const commentNodesIterator = doc.createNodeIterator(node, NodeFilter.SHOW_COMMENT, {
+    acceptNode(node2) {
+      const content = getTextNodeContent(node2);
+      const isTextNodeMarker = content === "ngetn" || content === "ngtns";
+      return isTextNodeMarker ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+    }
+  });
+  let currentNode;
+  const nodes = [];
+  while (currentNode = commentNodesIterator.nextNode()) {
+    nodes.push(currentNode);
+  }
+  for (const node2 of nodes) {
+    if (node2.textContent === "ngetn") {
+      node2.replaceWith(doc.createTextNode(""));
+    } else {
+      node2.remove();
+    }
+  }
+}
+var HydrationStatus;
+(function(HydrationStatus2) {
+  HydrationStatus2["Hydrated"] = "hydrated";
+  HydrationStatus2["Skipped"] = "skipped";
+  HydrationStatus2["Mismatched"] = "mismatched";
+})(HydrationStatus || (HydrationStatus = {}));
+var HYDRATION_INFO_KEY = "__ngDebugHydrationInfo__";
+function patchHydrationInfo(node, info) {
+  node[HYDRATION_INFO_KEY] = info;
+}
+function readHydrationInfo(node) {
+  return node[HYDRATION_INFO_KEY] ?? null;
+}
+function markRNodeAsClaimedByHydration(node, checkIfAlreadyClaimed = true) {
+  if (!ngDevMode) {
+    throw new Error("Calling `markRNodeAsClaimedByHydration` in prod mode is not supported and likely a mistake.");
+  }
+  if (checkIfAlreadyClaimed && isRNodeClaimedForHydration(node)) {
+    throw new Error("Trying to claim a node, which was claimed already.");
+  }
+  patchHydrationInfo(node, { status: HydrationStatus.Hydrated });
+  ngDevMode.hydratedNodes++;
+}
+function markRNodeAsSkippedByHydration(node) {
+  if (!ngDevMode) {
+    throw new Error("Calling `markRNodeAsSkippedByHydration` in prod mode is not supported and likely a mistake.");
+  }
+  patchHydrationInfo(node, { status: HydrationStatus.Skipped });
+  ngDevMode.componentsSkippedHydration++;
+}
+function markRNodeAsHavingHydrationMismatch(node, expectedNodeDetails = null, actualNodeDetails = null) {
+  if (!ngDevMode) {
+    throw new Error("Calling `markRNodeAsMismatchedByHydration` in prod mode is not supported and likely a mistake.");
+  }
+  while (node && readHydrationInfo(node)?.status !== HydrationStatus.Hydrated) {
+    node = node?.parentNode;
+  }
+  if (node) {
+    patchHydrationInfo(node, {
+      status: HydrationStatus.Mismatched,
+      expectedNodeDetails,
+      actualNodeDetails
+    });
+  }
+}
+function isRNodeClaimedForHydration(node) {
+  return readHydrationInfo(node)?.status === HydrationStatus.Hydrated;
+}
+function setSegmentHead(hydrationInfo, index, node) {
+  hydrationInfo.segmentHeads ??= {};
+  hydrationInfo.segmentHeads[index] = node;
+}
+function getSegmentHead(hydrationInfo, index) {
+  return hydrationInfo.segmentHeads?.[index] ?? null;
+}
+function getNgContainerSize(hydrationInfo, index) {
+  const data = hydrationInfo.data;
+  let size = data[ELEMENT_CONTAINERS]?.[index] ?? null;
+  if (size === null && data[CONTAINERS]?.[index]) {
+    size = calcSerializedContainerSize(hydrationInfo, index);
+  }
+  return size;
+}
+function getSerializedContainerViews(hydrationInfo, index) {
+  return hydrationInfo.data[CONTAINERS]?.[index] ?? null;
+}
+function calcSerializedContainerSize(hydrationInfo, index) {
+  const views = getSerializedContainerViews(hydrationInfo, index) ?? [];
+  let numNodes = 0;
+  for (let view of views) {
+    numNodes += view[NUM_ROOT_NODES] * (view[MULTIPLIER] ?? 1);
+  }
+  return numNodes;
+}
+function isDisconnectedNode$1(hydrationInfo, index) {
+  if (typeof hydrationInfo.disconnectedNodes === "undefined") {
+    const nodeIds = hydrationInfo.data[DISCONNECTED_NODES];
+    hydrationInfo.disconnectedNodes = nodeIds ? new Set(nodeIds) : null;
+  }
+  return !!hydrationInfo.disconnectedNodes?.has(index);
+}
 var IS_HYDRATION_DOM_REUSE_ENABLED = new InjectionToken(typeof ngDevMode === "undefined" || !!ngDevMode ? "IS_HYDRATION_DOM_REUSE_ENABLED" : "");
 var PRESERVE_HOST_CONTENT_DEFAULT = false;
 var PRESERVE_HOST_CONTENT = new InjectionToken(typeof ngDevMode === "undefined" || !!ngDevMode ? "PRESERVE_HOST_CONTENT" : "", {
   providedIn: "root",
   factory: () => PRESERVE_HOST_CONTENT_DEFAULT
 });
+var IS_I18N_HYDRATION_ENABLED = new InjectionToken(typeof ngDevMode === "undefined" || !!ngDevMode ? "IS_I18N_HYDRATION_ENABLED" : "");
 var policy$1;
 function getPolicy$1() {
   if (policy$1 === void 0) {
@@ -8140,6 +8245,7 @@ var SanitizingHtmlSerializer = class {
   sanitizeChildren(el) {
     let current = el.firstChild;
     let traverseContent = true;
+    let parentNodes = [];
     while (current) {
       if (current.nodeType === Node.ELEMENT_NODE) {
         traverseContent = this.startElement(current);
@@ -8149,19 +8255,20 @@ var SanitizingHtmlSerializer = class {
         this.sanitizedSomething = true;
       }
       if (traverseContent && current.firstChild) {
-        current = current.firstChild;
+        parentNodes.push(current);
+        current = getFirstChild(current);
         continue;
       }
       while (current) {
         if (current.nodeType === Node.ELEMENT_NODE) {
           this.endElement(current);
         }
-        let next = this.checkClobberedElement(current, current.nextSibling);
+        let next = getNextSibling(current);
         if (next) {
           current = next;
           break;
         }
-        current = this.checkClobberedElement(current, current.parentNode);
+        current = parentNodes.pop();
       }
     }
     return this.buf.join("");
@@ -8175,7 +8282,7 @@ var SanitizingHtmlSerializer = class {
    * @return True if the element's contents should be traversed.
    */
   startElement(element) {
-    const tagName = element.nodeName.toLowerCase();
+    const tagName = getNodeName(element).toLowerCase();
     if (!VALID_ELEMENTS.hasOwnProperty(tagName)) {
       this.sanitizedSomething = true;
       return !SKIP_TRAVERSING_CONTENT_IF_INVALID_ELEMENTS.hasOwnProperty(tagName);
@@ -8200,7 +8307,7 @@ var SanitizingHtmlSerializer = class {
     return true;
   }
   endElement(current) {
-    const tagName = current.nodeName.toLowerCase();
+    const tagName = getNodeName(current).toLowerCase();
     if (VALID_ELEMENTS.hasOwnProperty(tagName) && !VOID_ELEMENTS.hasOwnProperty(tagName)) {
       this.buf.push("</");
       this.buf.push(tagName);
@@ -8210,13 +8317,31 @@ var SanitizingHtmlSerializer = class {
   chars(chars) {
     this.buf.push(encodeEntities(chars));
   }
-  checkClobberedElement(node, nextNode) {
-    if (nextNode && (node.compareDocumentPosition(nextNode) & Node.DOCUMENT_POSITION_CONTAINED_BY) === Node.DOCUMENT_POSITION_CONTAINED_BY) {
-      throw new Error(`Failed to sanitize html because the element is clobbered: ${node.outerHTML}`);
-    }
-    return nextNode;
-  }
 };
+function isClobberedElement(parentNode, childNode) {
+  return (parentNode.compareDocumentPosition(childNode) & Node.DOCUMENT_POSITION_CONTAINED_BY) !== Node.DOCUMENT_POSITION_CONTAINED_BY;
+}
+function getNextSibling(node) {
+  const nextSibling = node.nextSibling;
+  if (nextSibling && node !== nextSibling.previousSibling) {
+    throw clobberedElementError(nextSibling);
+  }
+  return nextSibling;
+}
+function getFirstChild(node) {
+  const firstChild = node.firstChild;
+  if (firstChild && isClobberedElement(node, firstChild)) {
+    throw clobberedElementError(firstChild);
+  }
+  return firstChild;
+}
+function getNodeName(node) {
+  const nodeName = node.nodeName;
+  return typeof nodeName === "string" ? nodeName : "FORM";
+}
+function clobberedElementError(node) {
+  return new Error(`Failed to sanitize html because the element is clobbered: ${node.outerHTML}`);
+}
 var SURROGATE_PAIR_REGEXP = /[\uD800-\uDBFF][\uDC00-\uDFFF]/g;
 var NON_ALPHANUMERIC_REGEXP = /([^\#-~ |!])/g;
 function encodeEntities(value) {
@@ -8926,6 +9051,10 @@ function addViewToDOM(tView, parentTNode, renderer, lView, parentNativeNode, bef
   applyView(tView, lView, renderer, 1, parentNativeNode, beforeNode);
 }
 function detachViewFromDOM(tView, lView) {
+  lView[ENVIRONMENT].changeDetectionScheduler?.notify(
+    1
+    /* NotificationType.AfterRenderHooks */
+  );
   applyView(tView, lView, lView[RENDERER], 2, null, null);
 }
 function destroyViewTree(rootView) {
@@ -9049,7 +9178,11 @@ function destroyLView(tView, lView) {
   }
 }
 function cleanUpView(tView, lView) {
-  if (!(lView[FLAGS] & 256)) {
+  if (lView[FLAGS] & 256) {
+    return;
+  }
+  const prevConsumer = setActiveConsumer(null);
+  try {
     lView[FLAGS] &= ~128;
     lView[FLAGS] |= 256;
     lView[REACTIVE_TEMPLATE_CONSUMER] && consumerDestroy(lView[REACTIVE_TEMPLATE_CONSUMER]);
@@ -9070,9 +9203,12 @@ function cleanUpView(tView, lView) {
       }
     }
     unregisterLView(lView);
+  } finally {
+    setActiveConsumer(prevConsumer);
   }
 }
 function processCleanups(tView, lView) {
+  ngDevMode && assertNotReactive(processCleanups.name);
   const tCleanup = tView.cleanup;
   const lCleanup = lView[CLEANUP];
   if (tCleanup !== null) {
@@ -9106,6 +9242,7 @@ function processCleanups(tView, lView) {
   }
 }
 function executeOnDestroys(tView, lView) {
+  ngDevMode && assertNotReactive(executeOnDestroys.name);
   let destroyHooks;
   if (tView != null && (destroyHooks = tView.destroyHooks) != null) {
     for (let i = 0; i < destroyHooks.length; i += 2) {
@@ -9525,7 +9662,7 @@ function createLView(parentLView, tView, context2, flags, host, tHostNode, envir
   ngDevMode && assertDefined(lView[ENVIRONMENT], "LViewEnvironment is required");
   lView[RENDERER] = renderer || parentLView && parentLView[RENDERER];
   ngDevMode && assertDefined(lView[RENDERER], "Renderer is required");
-  lView[INJECTOR$1] = injector || parentLView && parentLView[INJECTOR$1] || null;
+  lView[INJECTOR] = injector || parentLView && parentLView[INJECTOR] || null;
   lView[T_HOST] = tHostNode;
   lView[ID] = getUniqueLViewId();
   lView[HYDRATION] = hydrationInfo;
@@ -10343,7 +10480,7 @@ function loadComponentRenderer(currentDef, tNode, lView) {
   return lView[RENDERER];
 }
 function handleError(lView, error) {
-  const injector = lView[INJECTOR$1];
+  const injector = lView[INJECTOR];
   const errorHandler = injector ? injector.get(ErrorHandler, null) : null;
   errorHandler && errorHandler.handleError(error);
 }
@@ -10373,7 +10510,7 @@ function renderComponent(hostLView, componentHostIdx) {
   syncViewWithBlueprint(componentTView, componentView);
   const hostRNode = componentView[HOST];
   if (hostRNode !== null && componentView[HYDRATION] === null) {
-    componentView[HYDRATION] = retrieveHydrationInfo(hostRNode, componentView[INJECTOR$1]);
+    componentView[HYDRATION] = retrieveHydrationInfo(hostRNode, componentView[INJECTOR]);
   }
   renderView(componentTView, componentView, componentView[CONTEXT]);
 }
@@ -10384,6 +10521,7 @@ function syncViewWithBlueprint(tView, lView) {
 }
 function renderView(tView, lView, context2) {
   ngDevMode && assertEqual(isCreationMode(lView), true, "Should be run in creation mode");
+  ngDevMode && assertNotReactive(renderView.name);
   enterView(lView);
   try {
     const viewQuery = tView.viewQuery;
@@ -10425,21 +10563,26 @@ function renderChildComponents(hostLView, components) {
   }
 }
 function createAndRenderEmbeddedLView(declarationLView, templateTNode, context2, options) {
-  const embeddedTView = templateTNode.tView;
-  ngDevMode && assertDefined(embeddedTView, "TView must be defined for a template node.");
-  ngDevMode && assertTNodeForLView(templateTNode, declarationLView);
-  const isSignalView = declarationLView[FLAGS] & 4096;
-  const viewFlags = isSignalView ? 4096 : 16;
-  const embeddedLView = createLView(declarationLView, embeddedTView, context2, viewFlags, null, templateTNode, null, null, null, options?.injector ?? null, options?.dehydratedView ?? null);
-  const declarationLContainer = declarationLView[templateTNode.index];
-  ngDevMode && assertLContainer(declarationLContainer);
-  embeddedLView[DECLARATION_LCONTAINER] = declarationLContainer;
-  const declarationViewLQueries = declarationLView[QUERIES];
-  if (declarationViewLQueries !== null) {
-    embeddedLView[QUERIES] = declarationViewLQueries.createEmbeddedView(embeddedTView);
+  const prevConsumer = setActiveConsumer(null);
+  try {
+    const embeddedTView = templateTNode.tView;
+    ngDevMode && assertDefined(embeddedTView, "TView must be defined for a template node.");
+    ngDevMode && assertTNodeForLView(templateTNode, declarationLView);
+    const isSignalView = declarationLView[FLAGS] & 4096;
+    const viewFlags = isSignalView ? 4096 : 16;
+    const embeddedLView = createLView(declarationLView, embeddedTView, context2, viewFlags, null, templateTNode, null, null, null, options?.injector ?? null, options?.dehydratedView ?? null);
+    const declarationLContainer = declarationLView[templateTNode.index];
+    ngDevMode && assertLContainer(declarationLContainer);
+    embeddedLView[DECLARATION_LCONTAINER] = declarationLContainer;
+    const declarationViewLQueries = declarationLView[QUERIES];
+    if (declarationViewLQueries !== null) {
+      embeddedLView[QUERIES] = declarationViewLQueries.createEmbeddedView(embeddedTView);
+    }
+    renderView(embeddedTView, embeddedLView, context2);
+    return embeddedLView;
+  } finally {
+    setActiveConsumer(prevConsumer);
   }
-  renderView(embeddedTView, embeddedLView, context2);
-  return embeddedLView;
 }
 function getLViewFromLContainer(lContainer, index) {
   const adjustedIndex = CONTAINER_HEADER_OFFSET + index;
@@ -10599,14 +10742,14 @@ function detectChangesInternal(lView, notifyErrorHandler = true, mode = 0) {
   }
 }
 function detectChangesInViewWhileDirty(lView, mode) {
-  detectChangesInView(lView, mode);
+  detectChangesInView$1(lView, mode);
   let retries = 0;
   while (requiresRefreshOrTraversal(lView)) {
     if (retries === MAXIMUM_REFRESH_RERUNS) {
       throw new RuntimeError(103, ngDevMode && "Infinite change detection while trying to refresh views. There may be components which each cause the other to require a refresh, causing an infinite loop.");
     }
     retries++;
-    detectChangesInView(
+    detectChangesInView$1(
       lView,
       1
       /* ChangeDetectionMode.Targeted */
@@ -10786,9 +10929,9 @@ function detectChangesInViewIfAttached(lView, mode) {
   if (!viewAttachedToChangeDetector(lView)) {
     return;
   }
-  detectChangesInView(lView, mode);
+  detectChangesInView$1(lView, mode);
 }
-function detectChangesInView(lView, mode) {
+function detectChangesInView$1(lView, mode) {
   const isInCheckNoChangesPass = ngDevMode && isInCheckNoChangesMode();
   const tView = lView[TVIEW];
   const flags = lView[FLAGS];
@@ -11420,7 +11563,18 @@ function cleanupLContainer(lContainer) {
     cleanupLView(lContainer[i]);
   }
 }
+function cleanupDehydratedI18nNodes(lView) {
+  const i18nNodes = lView[HYDRATION]?.i18nNodes;
+  if (i18nNodes) {
+    const renderer = lView[RENDERER];
+    for (const node of i18nNodes.values()) {
+      nativeRemoveNode(renderer, node, false);
+    }
+    lView[HYDRATION].i18nNodes = void 0;
+  }
+}
 function cleanupLView(lView) {
+  cleanupDehydratedI18nNodes(lView);
   const tView = lView[TVIEW];
   for (let i = HEADER_OFFSET; i < tView.bindingStartIndex; i++) {
     if (isLContainer(lView[i])) {
@@ -11481,34 +11635,47 @@ function getNoOffsetIndex(tNode) {
 function isDisconnectedNode(tNode, lView) {
   return !(tNode.type & 16) && !!lView[tNode.index] && !unwrapRNode(lView[tNode.index])?.isConnected;
 }
+function locateI18nRNodeByIndex(hydrationInfo, noOffsetIndex) {
+  const i18nNodes = hydrationInfo.i18nNodes;
+  if (i18nNodes) {
+    const native = i18nNodes.get(noOffsetIndex);
+    if (native) {
+      i18nNodes.delete(noOffsetIndex);
+    }
+    return native;
+  }
+  return null;
+}
 function locateNextRNode(hydrationInfo, tView, lView, tNode) {
-  let native = null;
   const noOffsetIndex = getNoOffsetIndex(tNode);
-  const nodes = hydrationInfo.data[NODES];
-  if (nodes?.[noOffsetIndex]) {
-    native = locateRNodeByPath(nodes[noOffsetIndex], lView);
-  } else if (tView.firstChild === tNode) {
-    native = hydrationInfo.firstChild;
-  } else {
-    const previousTNodeParent = tNode.prev === null;
-    const previousTNode = tNode.prev ?? tNode.parent;
-    ngDevMode && assertDefined(previousTNode, "Unexpected state: current TNode does not have a connection to the previous node or a parent node.");
-    if (isFirstElementInNgContainer(tNode)) {
-      const noOffsetParentIndex = getNoOffsetIndex(tNode.parent);
-      native = getSegmentHead(hydrationInfo, noOffsetParentIndex);
+  let native = locateI18nRNodeByIndex(hydrationInfo, noOffsetIndex);
+  if (!native) {
+    const nodes = hydrationInfo.data[NODES];
+    if (nodes?.[noOffsetIndex]) {
+      native = locateRNodeByPath(nodes[noOffsetIndex], lView);
+    } else if (tView.firstChild === tNode) {
+      native = hydrationInfo.firstChild;
     } else {
-      let previousRElement = getNativeByTNode(previousTNode, lView);
-      if (previousTNodeParent) {
-        native = previousRElement.firstChild;
+      const previousTNodeParent = tNode.prev === null;
+      const previousTNode = tNode.prev ?? tNode.parent;
+      ngDevMode && assertDefined(previousTNode, "Unexpected state: current TNode does not have a connection to the previous node or a parent node.");
+      if (isFirstElementInNgContainer(tNode)) {
+        const noOffsetParentIndex = getNoOffsetIndex(tNode.parent);
+        native = getSegmentHead(hydrationInfo, noOffsetParentIndex);
       } else {
-        const noOffsetPrevSiblingIndex = getNoOffsetIndex(previousTNode);
-        const segmentHead = getSegmentHead(hydrationInfo, noOffsetPrevSiblingIndex);
-        if (previousTNode.type === 2 && segmentHead) {
-          const numRootNodesToSkip = calcSerializedContainerSize(hydrationInfo, noOffsetPrevSiblingIndex);
-          const nodesToSkip = numRootNodesToSkip + 1;
-          native = siblingAfter(nodesToSkip, segmentHead);
+        let previousRElement = getNativeByTNode(previousTNode, lView);
+        if (previousTNodeParent) {
+          native = previousRElement.firstChild;
         } else {
-          native = previousRElement.nextSibling;
+          const noOffsetPrevSiblingIndex = getNoOffsetIndex(previousTNode);
+          const segmentHead = getSegmentHead(hydrationInfo, noOffsetPrevSiblingIndex);
+          if (previousTNode.type === 2 && segmentHead) {
+            const numRootNodesToSkip = calcSerializedContainerSize(hydrationInfo, noOffsetPrevSiblingIndex);
+            const nodesToSkip = numRootNodesToSkip + 1;
+            native = siblingAfter(nodesToSkip, segmentHead);
+          } else {
+            native = previousRElement.nextSibling;
+          }
         }
       }
     }
@@ -11721,1148 +11888,10 @@ _Sanitizer.ɵprov = ɵɵdefineInjectable({
 });
 var Sanitizer = _Sanitizer;
 var NOT_FOUND_CHECK_ONLY_ELEMENT_INJECTOR = {};
-function isSignal(value) {
-  return typeof value === "function" && value[SIGNAL] !== void 0;
-}
-function computed(computation, options) {
-  const getter = createComputed(computation);
-  if (options?.equal) {
-    getter[SIGNAL].equal = options.equal;
-  }
-  if (ngDevMode) {
-    getter.toString = () => `[Computed: ${getter()}]`;
-  }
-  return getter;
-}
-var WRITABLE_SIGNAL = Symbol("WRITABLE_SIGNAL");
-function ɵunwrapWritableSignal(value) {
-  return null;
-}
-function signal(initialValue, options) {
-  const signalFn = createSignal(initialValue);
-  const node = signalFn[SIGNAL];
-  if (options?.equal) {
-    node.equal = options.equal;
-  }
-  signalFn.set = (newValue) => signalSetFn(node, newValue);
-  signalFn.update = (updateFn) => signalUpdateFn(node, updateFn);
-  signalFn.asReadonly = signalAsReadonlyFn.bind(signalFn);
-  if (ngDevMode) {
-    signalFn.toString = () => `[Signal: ${signalFn()}]`;
-  }
-  return signalFn;
-}
-function signalAsReadonlyFn() {
-  const node = this[SIGNAL];
-  if (node.readonlyFn === void 0) {
-    const readonlyFn = () => this();
-    readonlyFn[SIGNAL] = node;
-    node.readonlyFn = readonlyFn;
-  }
-  return node.readonlyFn;
-}
-function isWritableSignal(value) {
-  return isSignal(value) && typeof value.set === "function";
-}
-function untracked(nonReactiveReadsFn) {
-  const prevConsumer = setActiveConsumer(null);
-  try {
-    return nonReactiveReadsFn();
-  } finally {
-    setActiveConsumer(prevConsumer);
-  }
-}
-function isListLikeIterable(obj) {
-  if (!isJsObject(obj))
-    return false;
-  return Array.isArray(obj) || !(obj instanceof Map) && // JS Map are iterables but return entries as [k, v]
-  Symbol.iterator in obj;
-}
-function areIterablesEqual(a, b, comparator) {
-  const iterator1 = a[Symbol.iterator]();
-  const iterator2 = b[Symbol.iterator]();
-  while (true) {
-    const item1 = iterator1.next();
-    const item2 = iterator2.next();
-    if (item1.done && item2.done)
-      return true;
-    if (item1.done || item2.done)
-      return false;
-    if (!comparator(item1.value, item2.value))
-      return false;
-  }
-}
-function iterateListLike(obj, fn) {
-  if (Array.isArray(obj)) {
-    for (let i = 0; i < obj.length; i++) {
-      fn(obj[i]);
-    }
-  } else {
-    const iterator2 = obj[Symbol.iterator]();
-    let item;
-    while (!(item = iterator2.next()).done) {
-      fn(item.value);
-    }
-  }
-}
-function isJsObject(o) {
-  return o !== null && (typeof o === "function" || typeof o === "object");
-}
-var DefaultIterableDifferFactory = class {
-  constructor() {
-  }
-  supports(obj) {
-    return isListLikeIterable(obj);
-  }
-  create(trackByFn) {
-    return new DefaultIterableDiffer(trackByFn);
-  }
-};
-var trackByIdentity = (index, item) => item;
-var DefaultIterableDiffer = class {
-  constructor(trackByFn) {
-    this.length = 0;
-    this._linkedRecords = null;
-    this._unlinkedRecords = null;
-    this._previousItHead = null;
-    this._itHead = null;
-    this._itTail = null;
-    this._additionsHead = null;
-    this._additionsTail = null;
-    this._movesHead = null;
-    this._movesTail = null;
-    this._removalsHead = null;
-    this._removalsTail = null;
-    this._identityChangesHead = null;
-    this._identityChangesTail = null;
-    this._trackByFn = trackByFn || trackByIdentity;
-  }
-  forEachItem(fn) {
-    let record;
-    for (record = this._itHead; record !== null; record = record._next) {
-      fn(record);
-    }
-  }
-  forEachOperation(fn) {
-    let nextIt = this._itHead;
-    let nextRemove = this._removalsHead;
-    let addRemoveOffset = 0;
-    let moveOffsets = null;
-    while (nextIt || nextRemove) {
-      const record = !nextRemove || nextIt && nextIt.currentIndex < getPreviousIndex(nextRemove, addRemoveOffset, moveOffsets) ? nextIt : nextRemove;
-      const adjPreviousIndex = getPreviousIndex(record, addRemoveOffset, moveOffsets);
-      const currentIndex = record.currentIndex;
-      if (record === nextRemove) {
-        addRemoveOffset--;
-        nextRemove = nextRemove._nextRemoved;
-      } else {
-        nextIt = nextIt._next;
-        if (record.previousIndex == null) {
-          addRemoveOffset++;
-        } else {
-          if (!moveOffsets)
-            moveOffsets = [];
-          const localMovePreviousIndex = adjPreviousIndex - addRemoveOffset;
-          const localCurrentIndex = currentIndex - addRemoveOffset;
-          if (localMovePreviousIndex != localCurrentIndex) {
-            for (let i = 0; i < localMovePreviousIndex; i++) {
-              const offset = i < moveOffsets.length ? moveOffsets[i] : moveOffsets[i] = 0;
-              const index = offset + i;
-              if (localCurrentIndex <= index && index < localMovePreviousIndex) {
-                moveOffsets[i] = offset + 1;
-              }
-            }
-            const previousIndex = record.previousIndex;
-            moveOffsets[previousIndex] = localCurrentIndex - localMovePreviousIndex;
-          }
-        }
-      }
-      if (adjPreviousIndex !== currentIndex) {
-        fn(record, adjPreviousIndex, currentIndex);
-      }
-    }
-  }
-  forEachPreviousItem(fn) {
-    let record;
-    for (record = this._previousItHead; record !== null; record = record._nextPrevious) {
-      fn(record);
-    }
-  }
-  forEachAddedItem(fn) {
-    let record;
-    for (record = this._additionsHead; record !== null; record = record._nextAdded) {
-      fn(record);
-    }
-  }
-  forEachMovedItem(fn) {
-    let record;
-    for (record = this._movesHead; record !== null; record = record._nextMoved) {
-      fn(record);
-    }
-  }
-  forEachRemovedItem(fn) {
-    let record;
-    for (record = this._removalsHead; record !== null; record = record._nextRemoved) {
-      fn(record);
-    }
-  }
-  forEachIdentityChange(fn) {
-    let record;
-    for (record = this._identityChangesHead; record !== null; record = record._nextIdentityChange) {
-      fn(record);
-    }
-  }
-  diff(collection) {
-    if (collection == null)
-      collection = [];
-    if (!isListLikeIterable(collection)) {
-      throw new RuntimeError(900, ngDevMode && `Error trying to diff '${stringify(collection)}'. Only arrays and iterables are allowed`);
-    }
-    if (this.check(collection)) {
-      return this;
-    } else {
-      return null;
-    }
-  }
-  onDestroy() {
-  }
-  check(collection) {
-    this._reset();
-    let record = this._itHead;
-    let mayBeDirty = false;
-    let index;
-    let item;
-    let itemTrackBy;
-    if (Array.isArray(collection)) {
-      this.length = collection.length;
-      for (let index2 = 0; index2 < this.length; index2++) {
-        item = collection[index2];
-        itemTrackBy = this._trackByFn(index2, item);
-        if (record === null || !Object.is(record.trackById, itemTrackBy)) {
-          record = this._mismatch(record, item, itemTrackBy, index2);
-          mayBeDirty = true;
-        } else {
-          if (mayBeDirty) {
-            record = this._verifyReinsertion(record, item, itemTrackBy, index2);
-          }
-          if (!Object.is(record.item, item))
-            this._addIdentityChange(record, item);
-        }
-        record = record._next;
-      }
-    } else {
-      index = 0;
-      iterateListLike(collection, (item2) => {
-        itemTrackBy = this._trackByFn(index, item2);
-        if (record === null || !Object.is(record.trackById, itemTrackBy)) {
-          record = this._mismatch(record, item2, itemTrackBy, index);
-          mayBeDirty = true;
-        } else {
-          if (mayBeDirty) {
-            record = this._verifyReinsertion(record, item2, itemTrackBy, index);
-          }
-          if (!Object.is(record.item, item2))
-            this._addIdentityChange(record, item2);
-        }
-        record = record._next;
-        index++;
-      });
-      this.length = index;
-    }
-    this._truncate(record);
-    this.collection = collection;
-    return this.isDirty;
-  }
-  /* CollectionChanges is considered dirty if it has any additions, moves, removals, or identity
-   * changes.
-   */
-  get isDirty() {
-    return this._additionsHead !== null || this._movesHead !== null || this._removalsHead !== null || this._identityChangesHead !== null;
-  }
-  /**
-   * Reset the state of the change objects to show no changes. This means set previousKey to
-   * currentKey, and clear all of the queues (additions, moves, removals).
-   * Set the previousIndexes of moved and added items to their currentIndexes
-   * Reset the list of additions, moves and removals
-   *
-   * @internal
-   */
-  _reset() {
-    if (this.isDirty) {
-      let record;
-      for (record = this._previousItHead = this._itHead; record !== null; record = record._next) {
-        record._nextPrevious = record._next;
-      }
-      for (record = this._additionsHead; record !== null; record = record._nextAdded) {
-        record.previousIndex = record.currentIndex;
-      }
-      this._additionsHead = this._additionsTail = null;
-      for (record = this._movesHead; record !== null; record = record._nextMoved) {
-        record.previousIndex = record.currentIndex;
-      }
-      this._movesHead = this._movesTail = null;
-      this._removalsHead = this._removalsTail = null;
-      this._identityChangesHead = this._identityChangesTail = null;
-    }
-  }
-  /**
-   * This is the core function which handles differences between collections.
-   *
-   * - `record` is the record which we saw at this position last time. If null then it is a new
-   *   item.
-   * - `item` is the current item in the collection
-   * - `index` is the position of the item in the collection
-   *
-   * @internal
-   */
-  _mismatch(record, item, itemTrackBy, index) {
-    let previousRecord;
-    if (record === null) {
-      previousRecord = this._itTail;
-    } else {
-      previousRecord = record._prev;
-      this._remove(record);
-    }
-    record = this._unlinkedRecords === null ? null : this._unlinkedRecords.get(itemTrackBy, null);
-    if (record !== null) {
-      if (!Object.is(record.item, item))
-        this._addIdentityChange(record, item);
-      this._reinsertAfter(record, previousRecord, index);
-    } else {
-      record = this._linkedRecords === null ? null : this._linkedRecords.get(itemTrackBy, index);
-      if (record !== null) {
-        if (!Object.is(record.item, item))
-          this._addIdentityChange(record, item);
-        this._moveAfter(record, previousRecord, index);
-      } else {
-        record = this._addAfter(new IterableChangeRecord_(item, itemTrackBy), previousRecord, index);
-      }
-    }
-    return record;
-  }
-  /**
-   * This check is only needed if an array contains duplicates. (Short circuit of nothing dirty)
-   *
-   * Use case: `[a, a]` => `[b, a, a]`
-   *
-   * If we did not have this check then the insertion of `b` would:
-   *   1) evict first `a`
-   *   2) insert `b` at `0` index.
-   *   3) leave `a` at index `1` as is. <-- this is wrong!
-   *   3) reinsert `a` at index 2. <-- this is wrong!
-   *
-   * The correct behavior is:
-   *   1) evict first `a`
-   *   2) insert `b` at `0` index.
-   *   3) reinsert `a` at index 1.
-   *   3) move `a` at from `1` to `2`.
-   *
-   *
-   * Double check that we have not evicted a duplicate item. We need to check if the item type may
-   * have already been removed:
-   * The insertion of b will evict the first 'a'. If we don't reinsert it now it will be reinserted
-   * at the end. Which will show up as the two 'a's switching position. This is incorrect, since a
-   * better way to think of it is as insert of 'b' rather then switch 'a' with 'b' and then add 'a'
-   * at the end.
-   *
-   * @internal
-   */
-  _verifyReinsertion(record, item, itemTrackBy, index) {
-    let reinsertRecord = this._unlinkedRecords === null ? null : this._unlinkedRecords.get(itemTrackBy, null);
-    if (reinsertRecord !== null) {
-      record = this._reinsertAfter(reinsertRecord, record._prev, index);
-    } else if (record.currentIndex != index) {
-      record.currentIndex = index;
-      this._addToMoves(record, index);
-    }
-    return record;
-  }
-  /**
-   * Get rid of any excess {@link IterableChangeRecord_}s from the previous collection
-   *
-   * - `record` The first excess {@link IterableChangeRecord_}.
-   *
-   * @internal
-   */
-  _truncate(record) {
-    while (record !== null) {
-      const nextRecord = record._next;
-      this._addToRemovals(this._unlink(record));
-      record = nextRecord;
-    }
-    if (this._unlinkedRecords !== null) {
-      this._unlinkedRecords.clear();
-    }
-    if (this._additionsTail !== null) {
-      this._additionsTail._nextAdded = null;
-    }
-    if (this._movesTail !== null) {
-      this._movesTail._nextMoved = null;
-    }
-    if (this._itTail !== null) {
-      this._itTail._next = null;
-    }
-    if (this._removalsTail !== null) {
-      this._removalsTail._nextRemoved = null;
-    }
-    if (this._identityChangesTail !== null) {
-      this._identityChangesTail._nextIdentityChange = null;
-    }
-  }
-  /** @internal */
-  _reinsertAfter(record, prevRecord, index) {
-    if (this._unlinkedRecords !== null) {
-      this._unlinkedRecords.remove(record);
-    }
-    const prev = record._prevRemoved;
-    const next = record._nextRemoved;
-    if (prev === null) {
-      this._removalsHead = next;
-    } else {
-      prev._nextRemoved = next;
-    }
-    if (next === null) {
-      this._removalsTail = prev;
-    } else {
-      next._prevRemoved = prev;
-    }
-    this._insertAfter(record, prevRecord, index);
-    this._addToMoves(record, index);
-    return record;
-  }
-  /** @internal */
-  _moveAfter(record, prevRecord, index) {
-    this._unlink(record);
-    this._insertAfter(record, prevRecord, index);
-    this._addToMoves(record, index);
-    return record;
-  }
-  /** @internal */
-  _addAfter(record, prevRecord, index) {
-    this._insertAfter(record, prevRecord, index);
-    if (this._additionsTail === null) {
-      this._additionsTail = this._additionsHead = record;
-    } else {
-      this._additionsTail = this._additionsTail._nextAdded = record;
-    }
-    return record;
-  }
-  /** @internal */
-  _insertAfter(record, prevRecord, index) {
-    const next = prevRecord === null ? this._itHead : prevRecord._next;
-    record._next = next;
-    record._prev = prevRecord;
-    if (next === null) {
-      this._itTail = record;
-    } else {
-      next._prev = record;
-    }
-    if (prevRecord === null) {
-      this._itHead = record;
-    } else {
-      prevRecord._next = record;
-    }
-    if (this._linkedRecords === null) {
-      this._linkedRecords = new _DuplicateMap();
-    }
-    this._linkedRecords.put(record);
-    record.currentIndex = index;
-    return record;
-  }
-  /** @internal */
-  _remove(record) {
-    return this._addToRemovals(this._unlink(record));
-  }
-  /** @internal */
-  _unlink(record) {
-    if (this._linkedRecords !== null) {
-      this._linkedRecords.remove(record);
-    }
-    const prev = record._prev;
-    const next = record._next;
-    if (prev === null) {
-      this._itHead = next;
-    } else {
-      prev._next = next;
-    }
-    if (next === null) {
-      this._itTail = prev;
-    } else {
-      next._prev = prev;
-    }
-    return record;
-  }
-  /** @internal */
-  _addToMoves(record, toIndex) {
-    if (record.previousIndex === toIndex) {
-      return record;
-    }
-    if (this._movesTail === null) {
-      this._movesTail = this._movesHead = record;
-    } else {
-      this._movesTail = this._movesTail._nextMoved = record;
-    }
-    return record;
-  }
-  _addToRemovals(record) {
-    if (this._unlinkedRecords === null) {
-      this._unlinkedRecords = new _DuplicateMap();
-    }
-    this._unlinkedRecords.put(record);
-    record.currentIndex = null;
-    record._nextRemoved = null;
-    if (this._removalsTail === null) {
-      this._removalsTail = this._removalsHead = record;
-      record._prevRemoved = null;
-    } else {
-      record._prevRemoved = this._removalsTail;
-      this._removalsTail = this._removalsTail._nextRemoved = record;
-    }
-    return record;
-  }
-  /** @internal */
-  _addIdentityChange(record, item) {
-    record.item = item;
-    if (this._identityChangesTail === null) {
-      this._identityChangesTail = this._identityChangesHead = record;
-    } else {
-      this._identityChangesTail = this._identityChangesTail._nextIdentityChange = record;
-    }
-    return record;
-  }
-};
-var IterableChangeRecord_ = class {
-  constructor(item, trackById) {
-    this.item = item;
-    this.trackById = trackById;
-    this.currentIndex = null;
-    this.previousIndex = null;
-    this._nextPrevious = null;
-    this._prev = null;
-    this._next = null;
-    this._prevDup = null;
-    this._nextDup = null;
-    this._prevRemoved = null;
-    this._nextRemoved = null;
-    this._nextAdded = null;
-    this._nextMoved = null;
-    this._nextIdentityChange = null;
-  }
-};
-var _DuplicateItemRecordList = class {
-  constructor() {
-    this._head = null;
-    this._tail = null;
-  }
-  /**
-   * Append the record to the list of duplicates.
-   *
-   * Note: by design all records in the list of duplicates hold the same value in record.item.
-   */
-  add(record) {
-    if (this._head === null) {
-      this._head = this._tail = record;
-      record._nextDup = null;
-      record._prevDup = null;
-    } else {
-      this._tail._nextDup = record;
-      record._prevDup = this._tail;
-      record._nextDup = null;
-      this._tail = record;
-    }
-  }
-  // Returns a IterableChangeRecord_ having IterableChangeRecord_.trackById == trackById and
-  // IterableChangeRecord_.currentIndex >= atOrAfterIndex
-  get(trackById, atOrAfterIndex) {
-    let record;
-    for (record = this._head; record !== null; record = record._nextDup) {
-      if ((atOrAfterIndex === null || atOrAfterIndex <= record.currentIndex) && Object.is(record.trackById, trackById)) {
-        return record;
-      }
-    }
-    return null;
-  }
-  /**
-   * Remove one {@link IterableChangeRecord_} from the list of duplicates.
-   *
-   * Returns whether the list of duplicates is empty.
-   */
-  remove(record) {
-    const prev = record._prevDup;
-    const next = record._nextDup;
-    if (prev === null) {
-      this._head = next;
-    } else {
-      prev._nextDup = next;
-    }
-    if (next === null) {
-      this._tail = prev;
-    } else {
-      next._prevDup = prev;
-    }
-    return this._head === null;
-  }
-};
-var _DuplicateMap = class {
-  constructor() {
-    this.map = /* @__PURE__ */ new Map();
-  }
-  put(record) {
-    const key = record.trackById;
-    let duplicates = this.map.get(key);
-    if (!duplicates) {
-      duplicates = new _DuplicateItemRecordList();
-      this.map.set(key, duplicates);
-    }
-    duplicates.add(record);
-  }
-  /**
-   * Retrieve the `value` using key. Because the IterableChangeRecord_ value may be one which we
-   * have already iterated over, we use the `atOrAfterIndex` to pretend it is not there.
-   *
-   * Use case: `[a, b, c, a, a]` if we are at index `3` which is the second `a` then asking if we
-   * have any more `a`s needs to return the second `a`.
-   */
-  get(trackById, atOrAfterIndex) {
-    const key = trackById;
-    const recordList = this.map.get(key);
-    return recordList ? recordList.get(trackById, atOrAfterIndex) : null;
-  }
-  /**
-   * Removes a {@link IterableChangeRecord_} from the list of duplicates.
-   *
-   * The list of duplicates also is removed from the map if it gets empty.
-   */
-  remove(record) {
-    const key = record.trackById;
-    const recordList = this.map.get(key);
-    if (recordList.remove(record)) {
-      this.map.delete(key);
-    }
-    return record;
-  }
-  get isEmpty() {
-    return this.map.size === 0;
-  }
-  clear() {
-    this.map.clear();
-  }
-};
-function getPreviousIndex(item, addRemoveOffset, moveOffsets) {
-  const previousIndex = item.previousIndex;
-  if (previousIndex === null)
-    return previousIndex;
-  let moveOffset = 0;
-  if (moveOffsets && previousIndex < moveOffsets.length) {
-    moveOffset = moveOffsets[previousIndex];
-  }
-  return previousIndex + addRemoveOffset + moveOffset;
-}
-var DefaultKeyValueDifferFactory = class {
-  constructor() {
-  }
-  supports(obj) {
-    return obj instanceof Map || isJsObject(obj);
-  }
-  create() {
-    return new DefaultKeyValueDiffer();
-  }
-};
-var DefaultKeyValueDiffer = class {
-  constructor() {
-    this._records = /* @__PURE__ */ new Map();
-    this._mapHead = null;
-    this._appendAfter = null;
-    this._previousMapHead = null;
-    this._changesHead = null;
-    this._changesTail = null;
-    this._additionsHead = null;
-    this._additionsTail = null;
-    this._removalsHead = null;
-    this._removalsTail = null;
-  }
-  get isDirty() {
-    return this._additionsHead !== null || this._changesHead !== null || this._removalsHead !== null;
-  }
-  forEachItem(fn) {
-    let record;
-    for (record = this._mapHead; record !== null; record = record._next) {
-      fn(record);
-    }
-  }
-  forEachPreviousItem(fn) {
-    let record;
-    for (record = this._previousMapHead; record !== null; record = record._nextPrevious) {
-      fn(record);
-    }
-  }
-  forEachChangedItem(fn) {
-    let record;
-    for (record = this._changesHead; record !== null; record = record._nextChanged) {
-      fn(record);
-    }
-  }
-  forEachAddedItem(fn) {
-    let record;
-    for (record = this._additionsHead; record !== null; record = record._nextAdded) {
-      fn(record);
-    }
-  }
-  forEachRemovedItem(fn) {
-    let record;
-    for (record = this._removalsHead; record !== null; record = record._nextRemoved) {
-      fn(record);
-    }
-  }
-  diff(map2) {
-    if (!map2) {
-      map2 = /* @__PURE__ */ new Map();
-    } else if (!(map2 instanceof Map || isJsObject(map2))) {
-      throw new RuntimeError(900, ngDevMode && `Error trying to diff '${stringify(map2)}'. Only maps and objects are allowed`);
-    }
-    return this.check(map2) ? this : null;
-  }
-  onDestroy() {
-  }
-  /**
-   * Check the current state of the map vs the previous.
-   * The algorithm is optimised for when the keys do no change.
-   */
-  check(map2) {
-    this._reset();
-    let insertBefore = this._mapHead;
-    this._appendAfter = null;
-    this._forEach(map2, (value, key) => {
-      if (insertBefore && insertBefore.key === key) {
-        this._maybeAddToChanges(insertBefore, value);
-        this._appendAfter = insertBefore;
-        insertBefore = insertBefore._next;
-      } else {
-        const record = this._getOrCreateRecordForKey(key, value);
-        insertBefore = this._insertBeforeOrAppend(insertBefore, record);
-      }
-    });
-    if (insertBefore) {
-      if (insertBefore._prev) {
-        insertBefore._prev._next = null;
-      }
-      this._removalsHead = insertBefore;
-      for (let record = insertBefore; record !== null; record = record._nextRemoved) {
-        if (record === this._mapHead) {
-          this._mapHead = null;
-        }
-        this._records.delete(record.key);
-        record._nextRemoved = record._next;
-        record.previousValue = record.currentValue;
-        record.currentValue = null;
-        record._prev = null;
-        record._next = null;
-      }
-    }
-    if (this._changesTail)
-      this._changesTail._nextChanged = null;
-    if (this._additionsTail)
-      this._additionsTail._nextAdded = null;
-    return this.isDirty;
-  }
-  /**
-   * Inserts a record before `before` or append at the end of the list when `before` is null.
-   *
-   * Notes:
-   * - This method appends at `this._appendAfter`,
-   * - This method updates `this._appendAfter`,
-   * - The return value is the new value for the insertion pointer.
-   */
-  _insertBeforeOrAppend(before, record) {
-    if (before) {
-      const prev = before._prev;
-      record._next = before;
-      record._prev = prev;
-      before._prev = record;
-      if (prev) {
-        prev._next = record;
-      }
-      if (before === this._mapHead) {
-        this._mapHead = record;
-      }
-      this._appendAfter = before;
-      return before;
-    }
-    if (this._appendAfter) {
-      this._appendAfter._next = record;
-      record._prev = this._appendAfter;
-    } else {
-      this._mapHead = record;
-    }
-    this._appendAfter = record;
-    return null;
-  }
-  _getOrCreateRecordForKey(key, value) {
-    if (this._records.has(key)) {
-      const record2 = this._records.get(key);
-      this._maybeAddToChanges(record2, value);
-      const prev = record2._prev;
-      const next = record2._next;
-      if (prev) {
-        prev._next = next;
-      }
-      if (next) {
-        next._prev = prev;
-      }
-      record2._next = null;
-      record2._prev = null;
-      return record2;
-    }
-    const record = new KeyValueChangeRecord_(key);
-    this._records.set(key, record);
-    record.currentValue = value;
-    this._addToAdditions(record);
-    return record;
-  }
-  /** @internal */
-  _reset() {
-    if (this.isDirty) {
-      let record;
-      this._previousMapHead = this._mapHead;
-      for (record = this._previousMapHead; record !== null; record = record._next) {
-        record._nextPrevious = record._next;
-      }
-      for (record = this._changesHead; record !== null; record = record._nextChanged) {
-        record.previousValue = record.currentValue;
-      }
-      for (record = this._additionsHead; record != null; record = record._nextAdded) {
-        record.previousValue = record.currentValue;
-      }
-      this._changesHead = this._changesTail = null;
-      this._additionsHead = this._additionsTail = null;
-      this._removalsHead = null;
-    }
-  }
-  // Add the record or a given key to the list of changes only when the value has actually changed
-  _maybeAddToChanges(record, newValue) {
-    if (!Object.is(newValue, record.currentValue)) {
-      record.previousValue = record.currentValue;
-      record.currentValue = newValue;
-      this._addToChanges(record);
-    }
-  }
-  _addToAdditions(record) {
-    if (this._additionsHead === null) {
-      this._additionsHead = this._additionsTail = record;
-    } else {
-      this._additionsTail._nextAdded = record;
-      this._additionsTail = record;
-    }
-  }
-  _addToChanges(record) {
-    if (this._changesHead === null) {
-      this._changesHead = this._changesTail = record;
-    } else {
-      this._changesTail._nextChanged = record;
-      this._changesTail = record;
-    }
-  }
-  /** @internal */
-  _forEach(obj, fn) {
-    if (obj instanceof Map) {
-      obj.forEach(fn);
-    } else {
-      Object.keys(obj).forEach((k) => fn(obj[k], k));
-    }
-  }
-};
-var KeyValueChangeRecord_ = class {
-  constructor(key) {
-    this.key = key;
-    this.previousValue = null;
-    this.currentValue = null;
-    this._nextPrevious = null;
-    this._next = null;
-    this._prev = null;
-    this._nextAdded = null;
-    this._nextRemoved = null;
-    this._nextChanged = null;
-  }
-};
-function defaultIterableDiffersFactory() {
-  return new IterableDiffers([new DefaultIterableDifferFactory()]);
-}
-var _IterableDiffers = class _IterableDiffers {
-  constructor(factories) {
-    this.factories = factories;
-  }
-  static create(factories, parent) {
-    if (parent != null) {
-      const copied = parent.factories.slice();
-      factories = factories.concat(copied);
-    }
-    return new _IterableDiffers(factories);
-  }
-  /**
-   * Takes an array of {@link IterableDifferFactory} and returns a provider used to extend the
-   * inherited {@link IterableDiffers} instance with the provided factories and return a new
-   * {@link IterableDiffers} instance.
-   *
-   * @usageNotes
-   * ### Example
-   *
-   * The following example shows how to extend an existing list of factories,
-   * which will only be applied to the injector for this component and its children.
-   * This step is all that's required to make a new {@link IterableDiffer} available.
-   *
-   * ```
-   * @Component({
-   *   viewProviders: [
-   *     IterableDiffers.extend([new ImmutableListDiffer()])
-   *   ]
-   * })
-   * ```
-   */
-  static extend(factories) {
-    return {
-      provide: _IterableDiffers,
-      useFactory: (parent) => {
-        return _IterableDiffers.create(factories, parent || defaultIterableDiffersFactory());
-      },
-      // Dependency technically isn't optional, but we can provide a better error message this way.
-      deps: [[_IterableDiffers, new SkipSelf(), new Optional()]]
-    };
-  }
-  find(iterable) {
-    const factory = this.factories.find((f) => f.supports(iterable));
-    if (factory != null) {
-      return factory;
-    } else {
-      throw new RuntimeError(901, ngDevMode && `Cannot find a differ supporting object '${iterable}' of type '${getTypeNameForDebugging(iterable)}'`);
-    }
-  }
-};
-_IterableDiffers.ɵprov = ɵɵdefineInjectable({ token: _IterableDiffers, providedIn: "root", factory: defaultIterableDiffersFactory });
-var IterableDiffers = _IterableDiffers;
-function getTypeNameForDebugging(type) {
-  return type["name"] || typeof type;
-}
-function defaultKeyValueDiffersFactory() {
-  return new KeyValueDiffers([new DefaultKeyValueDifferFactory()]);
-}
-var _KeyValueDiffers = class _KeyValueDiffers {
-  constructor(factories) {
-    this.factories = factories;
-  }
-  static create(factories, parent) {
-    if (parent) {
-      const copied = parent.factories.slice();
-      factories = factories.concat(copied);
-    }
-    return new _KeyValueDiffers(factories);
-  }
-  /**
-   * Takes an array of {@link KeyValueDifferFactory} and returns a provider used to extend the
-   * inherited {@link KeyValueDiffers} instance with the provided factories and return a new
-   * {@link KeyValueDiffers} instance.
-   *
-   * @usageNotes
-   * ### Example
-   *
-   * The following example shows how to extend an existing list of factories,
-   * which will only be applied to the injector for this component and its children.
-   * This step is all that's required to make a new {@link KeyValueDiffer} available.
-   *
-   * ```
-   * @Component({
-   *   viewProviders: [
-   *     KeyValueDiffers.extend([new ImmutableMapDiffer()])
-   *   ]
-   * })
-   * ```
-   */
-  static extend(factories) {
-    return {
-      provide: _KeyValueDiffers,
-      useFactory: (parent) => {
-        return _KeyValueDiffers.create(factories, parent || defaultKeyValueDiffersFactory());
-      },
-      // Dependency technically isn't optional, but we can provide a better error message this way.
-      deps: [[_KeyValueDiffers, new SkipSelf(), new Optional()]]
-    };
-  }
-  find(kv) {
-    const factory = this.factories.find((f) => f.supports(kv));
-    if (factory) {
-      return factory;
-    }
-    throw new RuntimeError(901, ngDevMode && `Cannot find a differ supporting object '${kv}'`);
-  }
-};
-_KeyValueDiffers.ɵprov = ɵɵdefineInjectable({ token: _KeyValueDiffers, providedIn: "root", factory: defaultKeyValueDiffersFactory });
-var KeyValueDiffers = _KeyValueDiffers;
-function devModeEqual(a, b) {
-  const isListLikeIterableA = isListLikeIterable(a);
-  const isListLikeIterableB = isListLikeIterable(b);
-  if (isListLikeIterableA && isListLikeIterableB) {
-    return areIterablesEqual(a, b, devModeEqual);
-  } else {
-    const isAObject = a && (typeof a === "object" || typeof a === "function");
-    const isBObject = b && (typeof b === "object" || typeof b === "function");
-    if (!isListLikeIterableA && isAObject && !isListLikeIterableB && isBObject) {
-      return true;
-    } else {
-      return Object.is(a, b);
-    }
-  }
-}
-var _ChangeDetectorRef = class _ChangeDetectorRef {
-};
-_ChangeDetectorRef.__NG_ELEMENT_ID__ = injectChangeDetectorRef;
-var ChangeDetectorRef = _ChangeDetectorRef;
-function injectChangeDetectorRef(flags) {
-  return createViewRef(
-    getCurrentTNode(),
-    getLView(),
-    (flags & 16) === 16
-    /* InternalInjectFlags.ForPipe */
-  );
-}
-function createViewRef(tNode, lView, isPipe2) {
-  if (isComponentHost(tNode) && !isPipe2) {
-    const componentView = getComponentLViewByIndex(tNode.index, lView);
-    return new ViewRef$1(componentView, componentView);
-  } else if (tNode.type & (3 | 12 | 32)) {
-    const hostComponentView = lView[DECLARATION_COMPONENT_VIEW];
-    return new ViewRef$1(hostComponentView, lView);
-  }
-  return null;
-}
-var keyValDiff = [new DefaultKeyValueDifferFactory()];
-var iterableDiff = [new DefaultIterableDifferFactory()];
-var defaultIterableDiffers = new IterableDiffers(iterableDiff);
-var defaultKeyValueDiffers = new KeyValueDiffers(keyValDiff);
-var _DestroyRef = class _DestroyRef {
-};
-_DestroyRef.__NG_ELEMENT_ID__ = injectDestroyRef;
-_DestroyRef.__NG_ENV_ID__ = (injector) => injector;
-var DestroyRef = _DestroyRef;
-var NodeInjectorDestroyRef = class extends DestroyRef {
-  constructor(_lView) {
-    super();
-    this._lView = _lView;
-  }
-  onDestroy(callback) {
-    storeLViewOnDestroy(this._lView, callback);
-    return () => removeLViewOnDestroy(this._lView, callback);
-  }
-};
-function injectDestroyRef() {
-  return new NodeInjectorDestroyRef(getLView());
-}
 function assertNotInReactiveContext(debugFn, extraContext) {
   if (getActiveConsumer() !== null) {
     throw new RuntimeError(-602, ngDevMode && `${debugFn.name}() cannot be called from within a reactive context.${extraContext ? ` ${extraContext}` : ""}`);
   }
-}
-var APP_EFFECT_SCHEDULER = new InjectionToken("", {
-  providedIn: "root",
-  factory: () => inject(EffectScheduler)
-});
-var _EffectScheduler = class _EffectScheduler {
-};
-_EffectScheduler.ɵprov = ɵɵdefineInjectable({
-  token: _EffectScheduler,
-  providedIn: "root",
-  factory: () => new ZoneAwareEffectScheduler()
-});
-var EffectScheduler = _EffectScheduler;
-var ZoneAwareEffectScheduler = class {
-  constructor() {
-    this.hasQueuedFlush = false;
-    this.queuedEffectCount = 0;
-    this.queues = /* @__PURE__ */ new Map();
-  }
-  scheduleEffect(handle) {
-    this.enqueue(handle);
-    if (!this.hasQueuedFlush) {
-      queueMicrotask(() => this.flush());
-      this.hasQueuedFlush = false;
-    }
-  }
-  enqueue(handle) {
-    const zone = handle.creationZone;
-    if (!this.queues.has(zone)) {
-      this.queues.set(zone, /* @__PURE__ */ new Set());
-    }
-    const queue2 = this.queues.get(zone);
-    if (queue2.has(handle)) {
-      return;
-    }
-    this.queuedEffectCount++;
-    queue2.add(handle);
-  }
-  /**
-   * Run all scheduled effects.
-   *
-   * Execution order of effects within the same zone is guaranteed to be FIFO, but there is no
-   * ordering guarantee between effects scheduled in different zones.
-   */
-  flush() {
-    while (this.queuedEffectCount > 0) {
-      for (const [zone, queue2] of this.queues) {
-        if (zone === null) {
-          this.flushQueue(queue2);
-        } else {
-          zone.run(() => this.flushQueue(queue2));
-        }
-      }
-    }
-  }
-  flushQueue(queue2) {
-    for (const handle of queue2) {
-      queue2.delete(handle);
-      this.queuedEffectCount--;
-      handle.run();
-    }
-  }
-};
-var EffectHandle = class {
-  constructor(scheduler, effectFn, creationZone, destroyRef, injector, allowSignalWrites) {
-    this.scheduler = scheduler;
-    this.effectFn = effectFn;
-    this.creationZone = creationZone;
-    this.injector = injector;
-    this.watcher = createWatch((onCleanup) => this.runEffect(onCleanup), () => this.schedule(), allowSignalWrites);
-    this.unregisterOnDestroy = destroyRef?.onDestroy(() => this.destroy());
-  }
-  runEffect(onCleanup) {
-    try {
-      this.effectFn(onCleanup);
-    } catch (err) {
-      const errorHandler = this.injector.get(ErrorHandler, null, { optional: true });
-      errorHandler?.handleError(err);
-    }
-  }
-  run() {
-    this.watcher.run();
-  }
-  schedule() {
-    this.scheduler.scheduleEffect(this);
-  }
-  destroy() {
-    this.watcher.destroy();
-    this.unregisterOnDestroy?.();
-  }
-};
-function effect(effectFn, options) {
-  ngDevMode && assertNotInReactiveContext(effect, "Call `effect` outside of a reactive context. For example, schedule the effect inside the component constructor.");
-  !options?.injector && assertInInjectionContext(effect);
-  const injector = options?.injector ?? inject(Injector);
-  const destroyRef = options?.manualCleanup !== true ? injector.get(DestroyRef) : null;
-  const handle = new EffectHandle(injector.get(APP_EFFECT_SCHEDULER), effectFn, typeof Zone === "undefined" ? null : Zone.current, destroyRef, injector, options?.allowSignalWrites ?? false);
-  const cdr = injector.get(ChangeDetectorRef, null, { optional: true });
-  if (!cdr || !(cdr._lView[FLAGS] & 8)) {
-    handle.watcher.notify();
-  } else {
-    (cdr._lView[EFFECTS_TO_SCHEDULE] ??= []).push(handle.watcher.notify);
-  }
-  return handle;
 }
 var markedFeatures = /* @__PURE__ */ new Set();
 function performanceMarkFeature(feature) {
@@ -13183,7 +12212,7 @@ var NOOP_AFTER_RENDER_REF = {
 };
 function internalAfterNextRender(callback, options) {
   const injector = options?.injector ?? inject(Injector);
-  if (!isPlatformBrowser(injector))
+  if (!options?.runOnServer && !isPlatformBrowser(injector))
     return;
   const afterRenderEventManager = injector.get(AfterRenderEventManager);
   afterRenderEventManager.internalCallbacks.push(callback);
@@ -13204,7 +12233,7 @@ function afterRender(callback, options) {
     unregisterFn();
   };
   const unregisterFn = injector.get(DestroyRef).onDestroy(destroy);
-  const instance = new AfterRenderCallback(injector, phase, callback);
+  const instance = runInInjectionContext(injector, () => new AfterRenderCallback(phase, callback));
   callbackHandler.register(instance);
   return { destroy };
 }
@@ -13223,19 +12252,23 @@ function afterNextRender(callback, options) {
     unregisterFn();
   };
   const unregisterFn = injector.get(DestroyRef).onDestroy(destroy);
-  const instance = new AfterRenderCallback(injector, phase, () => {
+  const instance = runInInjectionContext(injector, () => new AfterRenderCallback(phase, () => {
     destroy();
     callback();
-  });
+  }));
   callbackHandler.register(instance);
   return { destroy };
 }
 var AfterRenderCallback = class {
-  constructor(injector, phase, callbackFn) {
+  constructor(phase, callbackFn) {
     this.phase = phase;
     this.callbackFn = callbackFn;
-    this.zone = injector.get(NgZone);
-    this.errorHandler = injector.get(ErrorHandler, null, { optional: true });
+    this.zone = inject(NgZone);
+    this.errorHandler = inject(ErrorHandler, { optional: true });
+    inject(ChangeDetectionScheduler, { optional: true })?.notify(
+      1
+      /* NotificationType.AfterRenderHooks */
+    );
   }
   invoke() {
     try {
@@ -13291,15 +12324,18 @@ var _AfterRenderEventManager = class _AfterRenderEventManager {
     this.internalCallbacks = [];
   }
   /**
-   * Executes callbacks. Returns `true` if any callbacks executed.
+   * Executes internal and user-provided callbacks.
    */
   execute() {
+    this.executeInternalCallbacks();
+    this.handler?.execute();
+  }
+  executeInternalCallbacks() {
     const callbacks = [...this.internalCallbacks];
     this.internalCallbacks.length = 0;
     for (const callback of callbacks) {
       callback();
     }
-    this.handler?.execute();
   }
   ngOnDestroy() {
     this.handler?.destroy();
@@ -13665,83 +12701,88 @@ var ComponentFactory = class extends ComponentFactory$1 {
     this.isBoundToModule = !!ngModule;
   }
   create(injector, projectableNodes, rootSelectorOrNode, environmentInjector) {
-    if (ngDevMode && (typeof ngJitMode === "undefined" || ngJitMode) && this.componentDef.debugInfo?.forbidOrphanRendering) {
-      if (depsTracker.isOrphanComponent(this.componentType)) {
-        throw new RuntimeError(1001, `Orphan component found! Trying to render the component ${debugStringifyTypeForError(this.componentType)} without first loading the NgModule that declares it. It is recommended to make this component standalone in order to avoid this error. If this is not possible now, import the component's NgModule in the appropriate NgModule, or the standalone component in which you are trying to render this component. If this is a lazy import, load the NgModule lazily as well and use its module injector.`);
-      }
-    }
-    environmentInjector = environmentInjector || this.ngModule;
-    let realEnvironmentInjector = environmentInjector instanceof EnvironmentInjector ? environmentInjector : environmentInjector?.injector;
-    if (realEnvironmentInjector && this.componentDef.getStandaloneInjector !== null) {
-      realEnvironmentInjector = this.componentDef.getStandaloneInjector(realEnvironmentInjector) || realEnvironmentInjector;
-    }
-    const rootViewInjector = realEnvironmentInjector ? new ChainedInjector(injector, realEnvironmentInjector) : injector;
-    const rendererFactory = rootViewInjector.get(RendererFactory2, null);
-    if (rendererFactory === null) {
-      throw new RuntimeError(407, ngDevMode && "Angular was not able to inject a renderer (RendererFactory2). Likely this is due to a broken DI hierarchy. Make sure that any injector used to create this component has a correct parent.");
-    }
-    const sanitizer = rootViewInjector.get(Sanitizer, null);
-    const afterRenderEventManager = rootViewInjector.get(AfterRenderEventManager, null);
-    const changeDetectionScheduler = rootViewInjector.get(ChangeDetectionScheduler, null);
-    const environment = {
-      rendererFactory,
-      sanitizer,
-      // We don't use inline effects (yet).
-      inlineEffectRunner: null,
-      afterRenderEventManager,
-      changeDetectionScheduler
-    };
-    const hostRenderer = rendererFactory.createRenderer(null, this.componentDef);
-    const elementName = this.componentDef.selectors[0][0] || "div";
-    const hostRNode = rootSelectorOrNode ? locateHostElement(hostRenderer, rootSelectorOrNode, this.componentDef.encapsulation, rootViewInjector) : createElementNode(hostRenderer, elementName, getNamespace(elementName));
-    let rootFlags = 512;
-    if (this.componentDef.signals) {
-      rootFlags |= 4096;
-    } else if (!this.componentDef.onPush) {
-      rootFlags |= 16;
-    }
-    let hydrationInfo = null;
-    if (hostRNode !== null) {
-      hydrationInfo = retrieveHydrationInfo(
-        hostRNode,
-        rootViewInjector,
-        true
-        /* isRootView */
-      );
-    }
-    const rootTView = createTView(0, null, null, 1, 0, null, null, null, null, null, null);
-    const rootLView = createLView(null, rootTView, null, rootFlags, null, null, environment, hostRenderer, rootViewInjector, null, hydrationInfo);
-    enterView(rootLView);
-    let component;
-    let tElementNode;
+    const prevConsumer = setActiveConsumer(null);
     try {
-      const rootComponentDef = this.componentDef;
-      let rootDirectives;
-      let hostDirectiveDefs = null;
-      if (rootComponentDef.findHostDirectiveDefs) {
-        rootDirectives = [];
-        hostDirectiveDefs = /* @__PURE__ */ new Map();
-        rootComponentDef.findHostDirectiveDefs(rootComponentDef, rootDirectives, hostDirectiveDefs);
-        rootDirectives.push(rootComponentDef);
-        ngDevMode && assertNoDuplicateDirectives(rootDirectives);
-      } else {
-        rootDirectives = [rootComponentDef];
+      if (ngDevMode && (typeof ngJitMode === "undefined" || ngJitMode) && this.componentDef.debugInfo?.forbidOrphanRendering) {
+        if (depsTracker.isOrphanComponent(this.componentType)) {
+          throw new RuntimeError(1001, `Orphan component found! Trying to render the component ${debugStringifyTypeForError(this.componentType)} without first loading the NgModule that declares it. It is recommended to make this component standalone in order to avoid this error. If this is not possible now, import the component's NgModule in the appropriate NgModule, or the standalone component in which you are trying to render this component. If this is a lazy import, load the NgModule lazily as well and use its module injector.`);
+        }
       }
-      const hostTNode = createRootComponentTNode(rootLView, hostRNode);
-      const componentView = createRootComponentView(hostTNode, hostRNode, rootComponentDef, rootDirectives, rootLView, environment, hostRenderer);
-      tElementNode = getTNode(rootTView, HEADER_OFFSET);
-      if (hostRNode) {
-        setRootNodeAttributes(hostRenderer, rootComponentDef, hostRNode, rootSelectorOrNode);
+      environmentInjector = environmentInjector || this.ngModule;
+      let realEnvironmentInjector = environmentInjector instanceof EnvironmentInjector ? environmentInjector : environmentInjector?.injector;
+      if (realEnvironmentInjector && this.componentDef.getStandaloneInjector !== null) {
+        realEnvironmentInjector = this.componentDef.getStandaloneInjector(realEnvironmentInjector) || realEnvironmentInjector;
       }
-      if (projectableNodes !== void 0) {
-        projectNodes(tElementNode, this.ngContentSelectors, projectableNodes);
+      const rootViewInjector = realEnvironmentInjector ? new ChainedInjector(injector, realEnvironmentInjector) : injector;
+      const rendererFactory = rootViewInjector.get(RendererFactory2, null);
+      if (rendererFactory === null) {
+        throw new RuntimeError(407, ngDevMode && "Angular was not able to inject a renderer (RendererFactory2). Likely this is due to a broken DI hierarchy. Make sure that any injector used to create this component has a correct parent.");
       }
-      component = createRootComponent(componentView, rootComponentDef, rootDirectives, hostDirectiveDefs, rootLView, [LifecycleHooksFeature]);
-      renderView(rootTView, rootLView, null);
+      const sanitizer = rootViewInjector.get(Sanitizer, null);
+      const afterRenderEventManager = rootViewInjector.get(AfterRenderEventManager, null);
+      const changeDetectionScheduler = rootViewInjector.get(ChangeDetectionScheduler, null);
+      const environment = {
+        rendererFactory,
+        sanitizer,
+        // We don't use inline effects (yet).
+        inlineEffectRunner: null,
+        afterRenderEventManager,
+        changeDetectionScheduler
+      };
+      const hostRenderer = rendererFactory.createRenderer(null, this.componentDef);
+      const elementName = this.componentDef.selectors[0][0] || "div";
+      const hostRNode = rootSelectorOrNode ? locateHostElement(hostRenderer, rootSelectorOrNode, this.componentDef.encapsulation, rootViewInjector) : createElementNode(hostRenderer, elementName, getNamespace(elementName));
+      let rootFlags = 512;
+      if (this.componentDef.signals) {
+        rootFlags |= 4096;
+      } else if (!this.componentDef.onPush) {
+        rootFlags |= 16;
+      }
+      let hydrationInfo = null;
+      if (hostRNode !== null) {
+        hydrationInfo = retrieveHydrationInfo(
+          hostRNode,
+          rootViewInjector,
+          true
+          /* isRootView */
+        );
+      }
+      const rootTView = createTView(0, null, null, 1, 0, null, null, null, null, null, null);
+      const rootLView = createLView(null, rootTView, null, rootFlags, null, null, environment, hostRenderer, rootViewInjector, null, hydrationInfo);
+      enterView(rootLView);
+      let component;
+      let tElementNode;
+      try {
+        const rootComponentDef = this.componentDef;
+        let rootDirectives;
+        let hostDirectiveDefs = null;
+        if (rootComponentDef.findHostDirectiveDefs) {
+          rootDirectives = [];
+          hostDirectiveDefs = /* @__PURE__ */ new Map();
+          rootComponentDef.findHostDirectiveDefs(rootComponentDef, rootDirectives, hostDirectiveDefs);
+          rootDirectives.push(rootComponentDef);
+          ngDevMode && assertNoDuplicateDirectives(rootDirectives);
+        } else {
+          rootDirectives = [rootComponentDef];
+        }
+        const hostTNode = createRootComponentTNode(rootLView, hostRNode);
+        const componentView = createRootComponentView(hostTNode, hostRNode, rootComponentDef, rootDirectives, rootLView, environment, hostRenderer);
+        tElementNode = getTNode(rootTView, HEADER_OFFSET);
+        if (hostRNode) {
+          setRootNodeAttributes(hostRenderer, rootComponentDef, hostRNode, rootSelectorOrNode);
+        }
+        if (projectableNodes !== void 0) {
+          projectNodes(tElementNode, this.ngContentSelectors, projectableNodes);
+        }
+        component = createRootComponent(componentView, rootComponentDef, rootDirectives, hostDirectiveDefs, rootLView, [LifecycleHooksFeature]);
+        renderView(rootTView, rootLView, null);
+      } finally {
+        leaveView();
+      }
+      return new ComponentRef(this.componentType, component, createElementRef(tElementNode, rootLView), rootLView, tElementNode);
     } finally {
-      leaveView();
+      setActiveConsumer(prevConsumer);
     }
-    return new ComponentRef(this.componentType, component, createElementRef(tElementNode, rootLView), rootLView, tElementNode);
   }
 };
 var ComponentRef = class extends ComponentRef$1 {
@@ -13804,7 +12845,7 @@ function createRootComponentView(tNode, hostRNode, rootComponentDef, rootDirecti
   applyRootComponentStyling(rootDirectives, tNode, hostRNode, hostRenderer);
   let hydrationInfo = null;
   if (hostRNode !== null) {
-    hydrationInfo = retrieveHydrationInfo(hostRNode, rootView[INJECTOR$1]);
+    hydrationInfo = retrieveHydrationInfo(hostRNode, rootView[INJECTOR]);
   }
   const viewRenderer = environment.rendererFactory.createRenderer(hostRNode, rootComponentDef);
   let lViewFlags = 16;
@@ -13859,7 +12900,7 @@ function createRootComponent(componentView, rootComponentDef, rootDirectives, ho
 }
 function setRootNodeAttributes(hostRenderer, componentDef, hostRNode, rootSelectorOrNode) {
   if (rootSelectorOrNode) {
-    setUpAttributes(hostRenderer, hostRNode, ["ng-version", "17.2.2"]);
+    setUpAttributes(hostRenderer, hostRNode, ["ng-version", "17.3.0"]);
   } else {
     const { attrs, classes } = extractAttrsAndClassesFromSelector(componentDef.selectors[0]);
     if (attrs) {
@@ -14472,6 +13513,40 @@ function getQueryResults(lView, queryIndex) {
   const tQuery = getTQuery(tView, queryIndex);
   return tQuery.crossesNgTemplate ? collectQueryResults(tView, lView, queryIndex, []) : materializeViewResults(tView, lView, tQuery, queryIndex);
 }
+function isSignal(value) {
+  return typeof value === "function" && value[SIGNAL] !== void 0;
+}
+var ɵWRITABLE_SIGNAL = Symbol("WRITABLE_SIGNAL");
+function ɵunwrapWritableSignal(value) {
+  return null;
+}
+function signal(initialValue, options) {
+  performanceMarkFeature("NgSignals");
+  const signalFn = createSignal(initialValue);
+  const node = signalFn[SIGNAL];
+  if (options?.equal) {
+    node.equal = options.equal;
+  }
+  signalFn.set = (newValue) => signalSetFn(node, newValue);
+  signalFn.update = (updateFn) => signalUpdateFn(node, updateFn);
+  signalFn.asReadonly = signalAsReadonlyFn.bind(signalFn);
+  if (ngDevMode) {
+    signalFn.toString = () => `[Signal: ${signalFn()}]`;
+  }
+  return signalFn;
+}
+function signalAsReadonlyFn() {
+  const node = this[SIGNAL];
+  if (node.readonlyFn === void 0) {
+    const readonlyFn = () => this();
+    readonlyFn[SIGNAL] = node;
+    node.readonlyFn = readonlyFn;
+  }
+  return node.readonlyFn;
+}
+function isWritableSignal(value) {
+  return isSignal(value) && typeof value.set === "function";
+}
 function createQuerySignalFn(firstOnly, required) {
   let node;
   const signalFn = createComputed(() => {
@@ -14541,9 +13616,11 @@ function refreshSignalQuery(node, firstOnly) {
   }
 }
 function viewChildFn(locator, opts) {
+  ngDevMode && assertInInjectionContext(viewChild);
   return createSingleResultOptionalQuerySignalFn();
 }
 function viewChildRequiredFn(locator, opts) {
+  ngDevMode && assertInInjectionContext(viewChild);
   return createSingleResultRequiredQuerySignalFn();
 }
 var viewChild = (() => {
@@ -14551,12 +13628,15 @@ var viewChild = (() => {
   return viewChildFn;
 })();
 function viewChildren(locator, opts) {
+  ngDevMode && assertInInjectionContext(viewChildren);
   return createMultiResultQuerySignalFn();
 }
 function contentChildFn(locator, opts) {
+  ngDevMode && assertInInjectionContext(contentChild);
   return createSingleResultOptionalQuerySignalFn();
 }
 function contentChildRequiredFn(locator, opts) {
+  ngDevMode && assertInInjectionContext(contentChildren);
   return createSingleResultRequiredQuerySignalFn();
 }
 var contentChild = (() => {
@@ -14567,40 +13647,28 @@ function contentChildren(locator, opts) {
   return createMultiResultQuerySignalFn();
 }
 function createModelSignal(initialValue) {
-  const subscriptions = [];
   const node = Object.create(INPUT_SIGNAL_NODE);
+  const emitterRef = new OutputEmitterRef();
   node.value = initialValue;
   function getter() {
     producerAccessed(node);
     assertModelSet(node.value);
     return node.value;
   }
-  function notifySubscribers(value) {
-    for (let i = 0; i < subscriptions.length; i++) {
-      subscriptions[i](value);
-    }
-  }
   getter[SIGNAL] = node;
-  getter.asReadonly = () => getter();
+  getter.asReadonly = signalAsReadonlyFn.bind(getter);
   getter.set = (newValue) => {
     if (!node.equal(node.value, newValue)) {
       signalSetFn(node, newValue);
-      notifySubscribers(newValue);
+      emitterRef.emit(newValue);
     }
   };
   getter.update = (updateFn) => {
     assertModelSet(node.value);
     getter.set(updateFn(node.value));
   };
-  getter.subscribe = (callback) => {
-    subscriptions.push(callback);
-    return () => {
-      const index = subscriptions.indexOf(callback);
-      if (index > -1) {
-        subscriptions.splice(index, 1);
-      }
-    };
-  };
+  getter.subscribe = emitterRef.subscribe.bind(emitterRef);
+  getter.destroyRef = emitterRef.destroyRef;
   if (ngDevMode) {
     getter.toString = () => `[Model Signal: ${getter()}]`;
   }
@@ -14612,9 +13680,11 @@ function assertModelSet(value) {
   }
 }
 function modelFunction(initialValue) {
+  ngDevMode && assertInInjectionContext(model);
   return createModelSignal(initialValue);
 }
 function modelRequiredFunction() {
+  ngDevMode && assertInInjectionContext(model);
   return createModelSignal(REQUIRED_UNSET_VALUE);
 }
 var model = (() => {
@@ -15019,42 +14089,6 @@ function ɵɵInputTransformsFeature(definition) {
   }
   definition.inputTransforms = inputTransforms;
 }
-var ASYNC_COMPONENT_METADATA_FN = "__ngAsyncComponentMetadataFn__";
-function getAsyncClassMetadataFn(type) {
-  const componentClass = type;
-  return componentClass[ASYNC_COMPONENT_METADATA_FN] ?? null;
-}
-function setClassMetadataAsync(type, dependencyLoaderFn, metadataSetterFn) {
-  const componentClass = type;
-  componentClass[ASYNC_COMPONENT_METADATA_FN] = () => Promise.all(dependencyLoaderFn()).then((dependencies) => {
-    metadataSetterFn(...dependencies);
-    componentClass[ASYNC_COMPONENT_METADATA_FN] = null;
-    return dependencies;
-  });
-  return componentClass[ASYNC_COMPONENT_METADATA_FN];
-}
-function setClassMetadata(type, decorators, ctorParameters, propDecorators) {
-  return noSideEffects(() => {
-    const clazz = type;
-    if (decorators !== null) {
-      if (clazz.hasOwnProperty("decorators") && clazz.decorators !== void 0) {
-        clazz.decorators.push(...decorators);
-      } else {
-        clazz.decorators = decorators;
-      }
-    }
-    if (ctorParameters !== null) {
-      clazz.ctorParameters = ctorParameters;
-    }
-    if (propDecorators !== null) {
-      if (clazz.hasOwnProperty("propDecorators") && clazz.propDecorators !== void 0) {
-        clazz.propDecorators = __spreadValues(__spreadValues({}, clazz.propDecorators), propDecorators);
-      } else {
-        clazz.propDecorators = propDecorators;
-      }
-    }
-  });
-}
 var NgModuleRef$1 = class {
 };
 var NgModuleFactory$1 = class {
@@ -15137,6 +14171,71 @@ function createEnvironmentInjector(providers, parent, debugName = null) {
   const adapter = new EnvironmentNgModuleRefAdapter({ providers, parent, debugName, runEnvironmentInitializers: true });
   return adapter.injector;
 }
+var _CachedInjectorService = class _CachedInjectorService {
+  constructor() {
+    this.cachedInjectors = /* @__PURE__ */ new Map();
+  }
+  getOrCreateInjector(key, parentInjector, providers, debugName) {
+    if (!this.cachedInjectors.has(key)) {
+      const injector = providers.length > 0 ? createEnvironmentInjector(providers, parentInjector, debugName) : null;
+      this.cachedInjectors.set(key, injector);
+    }
+    return this.cachedInjectors.get(key);
+  }
+  ngOnDestroy() {
+    try {
+      for (const injector of this.cachedInjectors.values()) {
+        if (injector !== null) {
+          injector.destroy();
+        }
+      }
+    } finally {
+      this.cachedInjectors.clear();
+    }
+  }
+};
+_CachedInjectorService.ɵprov = ɵɵdefineInjectable({
+  token: _CachedInjectorService,
+  providedIn: "environment",
+  factory: () => new _CachedInjectorService()
+});
+var CachedInjectorService = _CachedInjectorService;
+var ASYNC_COMPONENT_METADATA_FN = "__ngAsyncComponentMetadataFn__";
+function getAsyncClassMetadataFn(type) {
+  const componentClass = type;
+  return componentClass[ASYNC_COMPONENT_METADATA_FN] ?? null;
+}
+function setClassMetadataAsync(type, dependencyLoaderFn, metadataSetterFn) {
+  const componentClass = type;
+  componentClass[ASYNC_COMPONENT_METADATA_FN] = () => Promise.all(dependencyLoaderFn()).then((dependencies) => {
+    metadataSetterFn(...dependencies);
+    componentClass[ASYNC_COMPONENT_METADATA_FN] = null;
+    return dependencies;
+  });
+  return componentClass[ASYNC_COMPONENT_METADATA_FN];
+}
+function setClassMetadata(type, decorators, ctorParameters, propDecorators) {
+  return noSideEffects(() => {
+    const clazz = type;
+    if (decorators !== null) {
+      if (clazz.hasOwnProperty("decorators") && clazz.decorators !== void 0) {
+        clazz.decorators.push(...decorators);
+      } else {
+        clazz.decorators = decorators;
+      }
+    }
+    if (ctorParameters !== null) {
+      clazz.ctorParameters = ctorParameters;
+    }
+    if (propDecorators !== null) {
+      if (clazz.hasOwnProperty("propDecorators") && clazz.propDecorators !== void 0) {
+        clazz.propDecorators = __spreadValues(__spreadValues({}, clazz.propDecorators), propDecorators);
+      } else {
+        clazz.propDecorators = propDecorators;
+      }
+    }
+  });
+}
 var _PendingTasks = class _PendingTasks {
   constructor() {
     this.taskId = 0;
@@ -15178,6 +14277,57 @@ var PendingTasks = _PendingTasks;
     args: [{ providedIn: "root" }]
   }], null, null);
 })();
+function isListLikeIterable(obj) {
+  if (!isJsObject(obj))
+    return false;
+  return Array.isArray(obj) || !(obj instanceof Map) && // JS Map are iterables but return entries as [k, v]
+  Symbol.iterator in obj;
+}
+function areIterablesEqual(a, b, comparator) {
+  const iterator1 = a[Symbol.iterator]();
+  const iterator2 = b[Symbol.iterator]();
+  while (true) {
+    const item1 = iterator1.next();
+    const item2 = iterator2.next();
+    if (item1.done && item2.done)
+      return true;
+    if (item1.done || item2.done)
+      return false;
+    if (!comparator(item1.value, item2.value))
+      return false;
+  }
+}
+function iterateListLike(obj, fn) {
+  if (Array.isArray(obj)) {
+    for (let i = 0; i < obj.length; i++) {
+      fn(obj[i]);
+    }
+  } else {
+    const iterator2 = obj[Symbol.iterator]();
+    let item;
+    while (!(item = iterator2.next()).done) {
+      fn(item.value);
+    }
+  }
+}
+function isJsObject(o) {
+  return o !== null && (typeof o === "function" || typeof o === "object");
+}
+function devModeEqual(a, b) {
+  const isListLikeIterableA = isListLikeIterable(a);
+  const isListLikeIterableB = isListLikeIterable(b);
+  if (isListLikeIterableA && isListLikeIterableB) {
+    return areIterablesEqual(a, b, devModeEqual);
+  } else {
+    const isAObject = a && (typeof a === "object" || typeof a === "function");
+    const isBObject = b && (typeof b === "object" || typeof b === "function");
+    if (!isListLikeIterableA && isAObject && !isListLikeIterableB && isBObject) {
+      return true;
+    } else {
+      return Object.is(a, b);
+    }
+  }
+}
 function updateBinding(lView, bindingIndex, value) {
   return lView[bindingIndex] = value;
 }
@@ -15216,6 +14366,9 @@ function bindingUpdated3(lView, bindingIndex, exp1, exp2, exp3) {
 function bindingUpdated4(lView, bindingIndex, exp1, exp2, exp3, exp4) {
   const different = bindingUpdated2(lView, bindingIndex, exp1, exp2);
   return bindingUpdated2(lView, bindingIndex + 2, exp3, exp4) || different;
+}
+function isDetachedByI18n(tNode) {
+  return (tNode.flags & 32) === 32;
 }
 function templateFirstCreatePass(index, tView, lView, templateFn, decls, vars, tagName, attrsIndex, localRefsIndex) {
   ngDevMode && assertFirstCreatePass(tView);
@@ -15274,7 +14427,7 @@ function createContainerAnchorImpl(tView, lView, tNode, index) {
 }
 function locateOrCreateContainerAnchorImpl(tView, lView, tNode, index) {
   const hydrationInfo = lView[HYDRATION];
-  const isNodeCreationMode = !hydrationInfo || isInSkipHydrationBlock$1() || isDisconnectedNode$1(hydrationInfo, index);
+  const isNodeCreationMode = !hydrationInfo || isInSkipHydrationBlock$1() || isDetachedByI18n(tNode) || isDisconnectedNode$1(hydrationInfo, index);
   lastNodeWasCreated(isNodeCreationMode);
   if (isNodeCreationMode) {
     return createContainerAnchorImpl(tView, lView, tNode, index);
@@ -15548,7 +14701,7 @@ function getTriggerElement(triggerLView, triggerIndex) {
   return element;
 }
 function registerDomTrigger(initialLView, tNode, triggerIndex, walkUpTimes, registerFn, callback, type) {
-  const injector = initialLView[INJECTOR$1];
+  const injector = initialLView[INJECTOR];
   function pollDomTrigger() {
     if (isDestroyed(initialLView)) {
       return;
@@ -15581,7 +14734,7 @@ function registerDomTrigger(initialLView, tNode, triggerIndex, walkUpTimes, regi
   internalAfterNextRender(pollDomTrigger, { injector });
 }
 function onIdle(callback, lView) {
-  const injector = lView[INJECTOR$1];
+  const injector = lView[INJECTOR];
   const scheduler = injector.get(IdleScheduler);
   const cleanupFn = () => scheduler.remove(callback);
   scheduler.add(callback);
@@ -15655,7 +14808,7 @@ function onTimer(delay2) {
   return (callback, lView) => scheduleTimerTrigger(delay2, callback, lView);
 }
 function scheduleTimerTrigger(delay2, callback, lView) {
-  const injector = lView[INJECTOR$1];
+  const injector = lView[INJECTOR];
   const scheduler = injector.get(TimerScheduler);
   const cleanupFn = () => scheduler.remove(callback);
   scheduler.add(delay2, callback);
@@ -15818,7 +14971,8 @@ function ɵɵdefer(index, primaryTmplIndex, dependencyResolverFn, loadingTmplInd
       loadingBlockConfig: null,
       dependencyResolverFn: dependencyResolverFn ?? null,
       loadingState: DeferDependenciesLoadingState.NOT_STARTED,
-      loadingPromise: null
+      loadingPromise: null,
+      providers: null
     };
     enableTimerScheduling?.(tView, tDetails, placeholderConfigIndex, loadingConfigIndex);
     setTDeferBlockDetails(tView, adjustedIndex, tDetails);
@@ -15893,7 +15047,7 @@ function ɵɵdeferOnImmediate() {
   const lView = getLView();
   const tNode = getCurrentTNode();
   const tView = lView[TVIEW];
-  const injector = lView[INJECTOR$1];
+  const injector = lView[INJECTOR];
   const tDetails = getTDeferBlockDetails(tView, tNode);
   if (!shouldTriggerDeferBlock(injector) || tDetails.loadingTmplIndex === null) {
     renderPlaceholder(lView, tNode);
@@ -16066,8 +15220,18 @@ function applyDeferBlockState(newState, lDetails, lContainer, tNode, hostLView) 
     const activeBlockTNode = getTNode(hostTView, adjustedIndex);
     const viewIndex = 0;
     removeLViewFromLContainer(lContainer, viewIndex);
+    let injector;
+    if (newState === DeferBlockState.Complete) {
+      const tDetails = getTDeferBlockDetails(hostTView, tNode);
+      const providers = tDetails.providers;
+      if (providers && providers.length > 0) {
+        const parentInjector = hostLView[INJECTOR];
+        const parentEnvInjector = parentInjector.get(EnvironmentInjector);
+        injector = parentEnvInjector.get(CachedInjectorService).getOrCreateInjector(tDetails, parentEnvInjector, providers, ngDevMode ? "DeferBlock Injector" : "");
+      }
+    }
     const dehydratedView = findMatchingDehydratedView(lContainer, activeBlockTNode.tView.ssrId);
-    const embeddedLView = createAndRenderEmbeddedLView(hostLView, activeBlockTNode, null, { dehydratedView });
+    const embeddedLView = createAndRenderEmbeddedLView(hostLView, activeBlockTNode, null, { dehydratedView, injector });
     addLViewToLContainer(lContainer, embeddedLView, viewIndex, shouldAddViewToDom(activeBlockTNode, dehydratedView));
     markViewDirty(embeddedLView);
   }
@@ -16116,12 +15280,12 @@ function isValidStateChange(currentState, newState) {
   return currentState < newState;
 }
 function triggerPrefetching(tDetails, lView, tNode) {
-  if (lView[INJECTOR$1] && shouldTriggerDeferBlock(lView[INJECTOR$1])) {
+  if (lView[INJECTOR] && shouldTriggerDeferBlock(lView[INJECTOR])) {
     triggerResourceLoading(tDetails, lView, tNode);
   }
 }
 function triggerResourceLoading(tDetails, lView, tNode) {
-  const injector = lView[INJECTOR$1];
+  const injector = lView[INJECTOR];
   const tView = lView[TVIEW];
   if (tDetails.loadingState !== DeferDependenciesLoadingState.NOT_STARTED) {
     return;
@@ -16182,6 +15346,9 @@ function triggerResourceLoading(tDetails, lView, tNode) {
       const primaryBlockTView = primaryBlockTNode.tView;
       if (directiveDefs.length > 0) {
         primaryBlockTView.directiveRegistry = addDepsToRegistry(primaryBlockTView.directiveRegistry, directiveDefs);
+        const directiveTypes = directiveDefs.map((def) => def.type);
+        const providers = internalImportProvidersFrom(false, ...directiveTypes);
+        tDetails.providers = providers;
       }
       if (pipeDefs.length > 0) {
         primaryBlockTView.pipeRegistry = addDepsToRegistry(primaryBlockTView.pipeRegistry, pipeDefs);
@@ -16208,7 +15375,7 @@ function renderDeferStateAfterResourceLoading(tDetails, tNode, lContainer) {
 function triggerDeferBlock(lView, tNode) {
   const tView = lView[TVIEW];
   const lContainer = lView[tNode.index];
-  const injector = lView[INJECTOR$1];
+  const injector = lView[INJECTOR];
   ngDevMode && assertLContainer(lContainer);
   if (!shouldTriggerDeferBlock(injector))
     return;
@@ -17346,6 +16513,7 @@ var RepeaterMetadata = class {
 };
 function ɵɵrepeaterCreate(index, templateFn, decls, vars, tagName, attrsIndex, trackByFn, trackByUsesComponentInstance, emptyTemplateFn, emptyDecls, emptyVars, emptyTagName, emptyAttrsIndex) {
   performanceMarkFeature("NgControlFlow");
+  ngDevMode && assertFunction(trackByFn, `A track expression must be a function, was ${typeof trackByFn} instead.`);
   const hasEmptyBlock = emptyTemplateFn !== void 0;
   const hostLView = getLView();
   const boundTrackBy = trackByUsesComponentInstance ? (
@@ -17502,7 +16670,7 @@ function ɵɵelementStart(index, name, attrsIndex, localRefsIndex) {
   }
   setCurrentTNode(tNode, true);
   setupStaticAttributes(renderer, native, tNode);
-  if ((tNode.flags & 32) !== 32 && wasLastNodeCreated()) {
+  if (!isDetachedByI18n(tNode) && wasLastNodeCreated()) {
     appendChild(tView, lView, native, tNode);
   }
   if (getElementDepthCount() === 0) {
@@ -17564,7 +16732,7 @@ var _locateOrCreateElementNode = (tView, lView, tNode, renderer, name, index) =>
 };
 function locateOrCreateElementNodeImpl(tView, lView, tNode, renderer, name, index) {
   const hydrationInfo = lView[HYDRATION];
-  const isNodeCreationMode = !hydrationInfo || isInSkipHydrationBlock$1() || isDisconnectedNode$1(hydrationInfo, index);
+  const isNodeCreationMode = !hydrationInfo || isInSkipHydrationBlock$1() || isDetachedByI18n(tNode) || isDisconnectedNode$1(hydrationInfo, index);
   lastNodeWasCreated(isNodeCreationMode);
   if (isNodeCreationMode) {
     return createElementNode(renderer, name, getNamespace$1());
@@ -17663,7 +16831,7 @@ var _locateOrCreateElementContainerNode = (tView, lView, tNode, index) => {
 function locateOrCreateElementContainerNode(tView, lView, tNode, index) {
   let comment;
   const hydrationInfo = lView[HYDRATION];
-  const isNodeCreationMode = !hydrationInfo || isInSkipHydrationBlock$1();
+  const isNodeCreationMode = !hydrationInfo || isInSkipHydrationBlock$1() || isDetachedByI18n(tNode);
   lastNodeWasCreated(isNodeCreationMode);
   if (isNodeCreationMode) {
     return createCommentNode(lView[RENDERER], ngDevMode ? "ng-container" : "");
@@ -17967,6 +17135,28 @@ function applyI18n(tView, lView, index) {
   changeMask = 0;
   changeMaskCounter = 0;
 }
+function createNodeWithoutHydration(lView, textOrName, nodeType) {
+  const renderer = lView[RENDERER];
+  switch (nodeType) {
+    case Node.COMMENT_NODE:
+      return createCommentNode(renderer, textOrName);
+    case Node.TEXT_NODE:
+      return createTextNode(renderer, textOrName);
+    case Node.ELEMENT_NODE:
+      return createElementNode(renderer, textOrName, null);
+  }
+}
+var _locateOrCreateNode = (lView, index, textOrName, nodeType) => {
+  lastNodeWasCreated(true);
+  return createNodeWithoutHydration(lView, textOrName, nodeType);
+};
+function locateOrCreateNodeImpl(lView, index, textOrName, nodeType) {
+  lastNodeWasCreated(true);
+  return createNodeWithoutHydration(lView, textOrName, nodeType);
+}
+function enableLocateOrCreateI18nNodeImpl() {
+  _locateOrCreateNode = locateOrCreateNodeImpl;
+}
 function applyCreateOpCodes(lView, createOpCodes, parentRNode, insertInFrontOf) {
   const renderer = lView[RENDERER];
   for (let i = 0; i < createOpCodes.length; i++) {
@@ -17976,10 +17166,12 @@ function applyCreateOpCodes(lView, createOpCodes, parentRNode, insertInFrontOf) 
     const appendNow = (opCode & I18nCreateOpCode.APPEND_EAGERLY) === I18nCreateOpCode.APPEND_EAGERLY;
     const index = opCode >>> I18nCreateOpCode.SHIFT;
     let rNode = lView[index];
+    let lastNodeWasCreated2 = false;
     if (rNode === null) {
-      rNode = lView[index] = isComment ? renderer.createComment(text) : createTextNode(renderer, text);
+      rNode = lView[index] = _locateOrCreateNode(lView, index, text, isComment ? Node.COMMENT_NODE : Node.TEXT_NODE);
+      lastNodeWasCreated2 = wasLastNodeCreated();
     }
-    if (appendNow && parentRNode !== null) {
+    if (appendNow && parentRNode !== null && lastNodeWasCreated2) {
       nativeInsertBefore(renderer, parentRNode, rNode, insertInFrontOf, false);
     }
   }
@@ -17996,7 +17188,7 @@ function applyMutableOpCodes(tView, mutableOpCodes, lView, anchorRNode) {
       if (lView[textNodeIndex] === null) {
         ngDevMode && ngDevMode.rendererCreateTextNode++;
         ngDevMode && assertIndexInRange(lView, textNodeIndex);
-        lView[textNodeIndex] = createTextNode(renderer, opCode);
+        lView[textNodeIndex] = _locateOrCreateNode(lView, textNodeIndex, opCode, Node.TEXT_NODE);
       }
     } else if (typeof opCode == "number") {
       switch (opCode & 1) {
@@ -18052,7 +17244,7 @@ function applyMutableOpCodes(tView, mutableOpCodes, lView, anchorRNode) {
             ngDevMode && assertEqual(typeof commentValue, "string", `Expected "${commentValue}" to be a comment node value`);
             ngDevMode && ngDevMode.rendererCreateComment++;
             ngDevMode && assertIndexInExpandoRange(lView, commentNodeIndex);
-            const commentRNode = lView[commentNodeIndex] = createCommentNode(renderer, commentValue);
+            const commentRNode = lView[commentNodeIndex] = _locateOrCreateNode(lView, commentNodeIndex, commentValue, Node.COMMENT_NODE);
             attachPatchData(commentRNode, lView);
           }
           break;
@@ -18063,7 +17255,7 @@ function applyMutableOpCodes(tView, mutableOpCodes, lView, anchorRNode) {
             ngDevMode && assertEqual(typeof tagName, "string", `Expected "${tagName}" to be an element node tag name`);
             ngDevMode && ngDevMode.rendererCreateElement++;
             ngDevMode && assertIndexInExpandoRange(lView, elementNodeIndex);
-            const elementRNode = lView[elementNodeIndex] = createElementNode(renderer, tagName, null);
+            const elementRNode = lView[elementNodeIndex] = _locateOrCreateNode(lView, elementNodeIndex, tagName, Node.ELEMENT_NODE);
             attachPatchData(elementRNode, lView);
           }
           break;
@@ -18415,6 +17607,7 @@ function i18nStartFirstCreatePass(tView, parentTNodeIndex, lView, index, message
   const createOpCodes = [];
   const updateOpCodes = [];
   const existingTNodeStack = [[]];
+  const astStack = [[]];
   if (ngDevMode) {
     attachDebugGetter(createOpCodes, i18nCreateOpCodesToString);
     attachDebugGetter(updateOpCodes, i18nUpdateOpCodesToString);
@@ -18431,7 +17624,7 @@ function i18nStartFirstCreatePass(tView, parentTNodeIndex, lView, index, message
           const text = part;
           ngDevMode && assertString(text, "Parsed ICU part should be string");
           if (text !== "") {
-            i18nStartFirstCreatePassProcessTextNode(tView, rootTNode, existingTNodeStack[0], createOpCodes, updateOpCodes, lView, text);
+            i18nStartFirstCreatePassProcessTextNode(astStack[0], tView, rootTNode, existingTNodeStack[0], createOpCodes, updateOpCodes, lView, text);
           }
         } else {
           const icuExpression = part;
@@ -18441,7 +17634,7 @@ function i18nStartFirstCreatePass(tView, parentTNodeIndex, lView, index, message
           const icuContainerTNode = createTNodeAndAddOpCode(tView, rootTNode, existingTNodeStack[0], lView, createOpCodes, ngDevMode ? `ICU ${index}:${icuExpression.mainBinding}` : "", true);
           const icuNodeIndex = icuContainerTNode.index;
           ngDevMode && assertGreaterThanOrEqual(icuNodeIndex, HEADER_OFFSET, "Index must be in absolute LView offset");
-          icuStart(tView, lView, updateOpCodes, parentTNodeIndex, icuExpression, icuNodeIndex);
+          icuStart(astStack[0], tView, lView, updateOpCodes, parentTNodeIndex, icuExpression, icuNodeIndex);
         }
       }
     } else {
@@ -18456,17 +17649,27 @@ function i18nStartFirstCreatePass(tView, parentTNodeIndex, lView, index, message
       const index2 = HEADER_OFFSET + Number.parseInt(value.substring(isClosing ? 2 : 1));
       if (isClosing) {
         existingTNodeStack.shift();
+        astStack.shift();
         setCurrentTNode(getCurrentParentTNode(), false);
       } else {
         const tNode = createTNodePlaceholder(tView, existingTNodeStack[0], index2);
         existingTNodeStack.unshift([]);
         setCurrentTNode(tNode, true);
+        const placeholderNode = {
+          kind: 2,
+          index: index2,
+          children: [],
+          type: type === 35 ? 0 : 1
+        };
+        astStack[0].push(placeholderNode);
+        astStack.unshift(placeholderNode.children);
       }
     }
   }
   tView.data[index] = {
     create: createOpCodes,
-    update: updateOpCodes
+    update: updateOpCodes,
+    ast: astStack[0]
   };
 }
 function createTNodeAndAddOpCode(tView, rootTNode, existingTNodes, lView, createOpCodes, text, isICU) {
@@ -18497,12 +17700,14 @@ function createTNodeAndAddOpCode(tView, rootTNode, existingTNodes, lView, create
   }
   return tNode;
 }
-function i18nStartFirstCreatePassProcessTextNode(tView, rootTNode, existingTNodes, createOpCodes, updateOpCodes, lView, text) {
+function i18nStartFirstCreatePassProcessTextNode(ast, tView, rootTNode, existingTNodes, createOpCodes, updateOpCodes, lView, text) {
   const hasBinding = text.match(BINDING_REGEXP);
   const tNode = createTNodeAndAddOpCode(tView, rootTNode, existingTNodes, lView, createOpCodes, hasBinding ? null : text, false);
+  const index = tNode.index;
   if (hasBinding) {
-    generateBindingUpdateOpCodes(updateOpCodes, text, tNode.index, null, 0, null);
+    generateBindingUpdateOpCodes(updateOpCodes, text, index, null, 0, null);
   }
+  ast.push({ kind: 0, index });
 }
 function i18nAttributesFirstPass(tView, index, values) {
   const previousElement = getCurrentTNode();
@@ -18601,7 +17806,7 @@ function getTranslationForTemplate(message, subTemplateIndex) {
     return removeInnerTemplateTranslation(message.substring(start, end));
   }
 }
-function icuStart(tView, lView, updateOpCodes, parentIdx, icuExpression, anchorIdx) {
+function icuStart(ast, tView, lView, updateOpCodes, parentIdx, icuExpression, anchorIdx) {
   ngDevMode && assertDefined(icuExpression, "ICU expression must be defined");
   let bindingMask = 0;
   const tIcu = {
@@ -18616,6 +17821,7 @@ function icuStart(tView, lView, updateOpCodes, parentIdx, icuExpression, anchorI
   addUpdateIcuSwitch(updateOpCodes, icuExpression, anchorIdx);
   setTIcu(tView, anchorIdx, tIcu);
   const values = icuExpression.values;
+  const cases = [];
   for (let i = 0; i < values.length; i++) {
     const valueArr = values[i];
     const nestedIcus = [];
@@ -18626,11 +17832,19 @@ function icuStart(tView, lView, updateOpCodes, parentIdx, icuExpression, anchorI
         valueArr[j] = `<!--�${icuIndex}�-->`;
       }
     }
-    bindingMask = parseIcuCase(tView, tIcu, lView, updateOpCodes, parentIdx, icuExpression.cases[i], valueArr.join(""), nestedIcus) | bindingMask;
+    const caseAst = [];
+    cases.push(caseAst);
+    bindingMask = parseIcuCase(caseAst, tView, tIcu, lView, updateOpCodes, parentIdx, icuExpression.cases[i], valueArr.join(""), nestedIcus) | bindingMask;
   }
   if (bindingMask) {
     addUpdateIcuUpdate(updateOpCodes, bindingMask, anchorIdx);
   }
+  ast.push({
+    kind: 3,
+    index: anchorIdx,
+    cases,
+    currentCaseLViewIndex: tIcu.currentCaseLViewIndex
+  });
 }
 function parseICUBlock(pattern) {
   const cases = [];
@@ -18698,7 +17912,7 @@ function i18nParseTextIntoPartsAndICU(pattern) {
   results.push(substring);
   return results;
 }
-function parseIcuCase(tView, tIcu, lView, updateOpCodes, parentIdx, caseName, unsafeCaseHtml, nestedIcus) {
+function parseIcuCase(ast, tView, tIcu, lView, updateOpCodes, parentIdx, caseName, unsafeCaseHtml, nestedIcus) {
   const create = [];
   const remove2 = [];
   const update = [];
@@ -18716,12 +17930,12 @@ function parseIcuCase(tView, tIcu, lView, updateOpCodes, parentIdx, caseName, un
   ngDevMode && assertDefined(inertBodyElement, "Unable to generate inert body element");
   const inertRootNode = getTemplateContent(inertBodyElement) || inertBodyElement;
   if (inertRootNode) {
-    return walkIcuTree(tView, tIcu, lView, updateOpCodes, create, remove2, update, inertRootNode, parentIdx, nestedIcus, 0);
+    return walkIcuTree(ast, tView, tIcu, lView, updateOpCodes, create, remove2, update, inertRootNode, parentIdx, nestedIcus, 0);
   } else {
     return 0;
   }
 }
-function walkIcuTree(tView, tIcu, lView, sharedUpdateOpCodes, create, remove2, update, parentNode, parentIdx, nestedIcus, depth) {
+function walkIcuTree(ast, tView, tIcu, lView, sharedUpdateOpCodes, create, remove2, update, parentNode, parentIdx, nestedIcus, depth) {
   let bindingMask = 0;
   let currentNode = parentNode.firstChild;
   while (currentNode) {
@@ -18752,7 +17966,13 @@ function walkIcuTree(tView, tIcu, lView, sharedUpdateOpCodes, create, remove2, u
               addCreateAttribute(create, newIndex, attr);
             }
           }
-          bindingMask = walkIcuTree(tView, tIcu, lView, sharedUpdateOpCodes, create, remove2, update, currentNode, newIndex, nestedIcus, depth + 1) | bindingMask;
+          const elementNode = {
+            kind: 1,
+            index: newIndex,
+            children: []
+          };
+          ast.push(elementNode);
+          bindingMask = walkIcuTree(elementNode.children, tView, tIcu, lView, sharedUpdateOpCodes, create, remove2, update, currentNode, newIndex, nestedIcus, depth + 1) | bindingMask;
           addRemoveNode(remove2, newIndex, depth);
         }
         break;
@@ -18764,6 +17984,10 @@ function walkIcuTree(tView, tIcu, lView, sharedUpdateOpCodes, create, remove2, u
         if (hasBinding) {
           bindingMask = generateBindingUpdateOpCodes(update, value, newIndex, null, 0, null) | bindingMask;
         }
+        ast.push({
+          kind: 0,
+          index: newIndex
+        });
         break;
       case Node.COMMENT_NODE:
         const isNestedIcu = NESTED_ICU.exec(currentNode.textContent || "");
@@ -18771,7 +17995,7 @@ function walkIcuTree(tView, tIcu, lView, sharedUpdateOpCodes, create, remove2, u
           const nestedIcuIndex = parseInt(isNestedIcu[1], 10);
           const icuExpression = nestedIcus[nestedIcuIndex];
           addCreateNodeAndAppend(create, ICU_MARKER, ngDevMode ? `nested ICU ${nestedIcuIndex}` : "", parentIdx, newIndex);
-          icuStart(tView, lView, sharedUpdateOpCodes, parentIdx, icuExpression, newIndex);
+          icuStart(ast, tView, lView, sharedUpdateOpCodes, parentIdx, icuExpression, newIndex);
           addRemoveNestedIcu(remove2, newIndex, depth);
         }
         break;
@@ -19028,18 +18252,16 @@ function listenerInternal(tView, lView, renderer, tNode, eventName, listenerFn, 
         if (ngDevMode && !isOutputSubscribable(output2)) {
           throw new Error(`@Output ${minifiedName} not initialized in '${directiveInstance.constructor.name}'.`);
         }
-        const subscriptionOrCallback = output2.subscribe(listenerFn);
+        const subscription = output2.subscribe(listenerFn);
         const idx = lCleanup.length;
-        lCleanup.push(listenerFn, subscriptionOrCallback);
-        if (tCleanup) {
-          const cleanupIdx = typeof subscriptionOrCallback === "function" ? idx + 1 : -(idx + 1);
-          tCleanup.push(eventName, tNode.index, idx, cleanupIdx);
-        }
+        lCleanup.push(listenerFn, subscription);
+        tCleanup && tCleanup.push(eventName, tNode.index, idx, -(idx + 1));
       }
     }
   }
 }
 function executeListenerWithErrorHandling(lView, context2, listenerFn, e) {
+  const prevConsumer = setActiveConsumer(null);
   try {
     profiler(6, context2, listenerFn);
     return listenerFn(e) !== false;
@@ -19048,6 +18270,7 @@ function executeListenerWithErrorHandling(lView, context2, listenerFn, e) {
     return false;
   } finally {
     profiler(7, context2, listenerFn);
+    setActiveConsumer(prevConsumer);
   }
 }
 function wrapListener(tNode, lView, context2, listenerFn, wrapWithPreventDefault) {
@@ -19404,7 +18627,7 @@ var _locateOrCreateTextNode = (tView, lView, tNode, value, index) => {
 };
 function locateOrCreateTextNodeImpl(tView, lView, tNode, value, index) {
   const hydrationInfo = lView[HYDRATION];
-  const isNodeCreationMode = !hydrationInfo || isInSkipHydrationBlock$1() || isDisconnectedNode$1(hydrationInfo, index);
+  const isNodeCreationMode = !hydrationInfo || isInSkipHydrationBlock$1() || isDetachedByI18n(tNode) || isDisconnectedNode$1(hydrationInfo, index);
   lastNodeWasCreated(isNodeCreationMode);
   if (isNodeCreationMode) {
     return createTextNode(lView[RENDERER], value);
@@ -21182,7 +20405,7 @@ var Version = class {
     this.patch = parts.slice(2).join(".");
   }
 };
-var VERSION = new Version("17.2.2");
+var VERSION = new Version("17.3.0");
 var _Console = class _Console {
   log(message) {
     console.log(message);
@@ -21568,7 +20791,7 @@ function getInjectorParent(injector) {
     ];
     return new NodeInjector(parentTNode, parentLView);
   } else {
-    const chainedInjector = lView[INJECTOR$1];
+    const chainedInjector = lView[INJECTOR];
     const injectorParent = chainedInjector.injector?.parent;
     if (injectorParent instanceof NodeInjector) {
       return injectorParent;
@@ -21583,7 +20806,7 @@ function getModuleInjectorOfNodeInjector(injector) {
   } else {
     throwError2("getModuleInjectorOfNodeInjector must be called with a NodeInjector");
   }
-  const chainedInjector = lView[INJECTOR$1];
+  const chainedInjector = lView[INJECTOR];
   const moduleInjector = chainedInjector.parentInjector;
   if (!moduleInjector) {
     throwError2("NodeInjector must have some connection to the module injector tree");
@@ -21986,6 +21209,9 @@ var _ApplicationRef = class _ApplicationRef {
     this._views = [];
     this.internalErrorHandler = inject(INTERNAL_APPLICATION_ERROR_HANDLER);
     this.afterRenderEffectManager = inject(AfterRenderEventManager);
+    this.externalTestViews = /* @__PURE__ */ new Set();
+    this.beforeRender = new Subject();
+    this.afterTick = new Subject();
     this.componentTypes = [];
     this.components = [];
     this.isStable = inject(PendingTasks).hasPendingTasks.pipe(map((pending) => !pending));
@@ -22086,13 +21312,18 @@ var _ApplicationRef = class _ApplicationRef {
    * detection pass during which all change detection must complete.
    */
   tick() {
+    this._tick(true);
+  }
+  /** @internal */
+  _tick(refreshViews) {
     (typeof ngDevMode === "undefined" || ngDevMode) && this.warnIfDestroyed();
     if (this._runningTick) {
       throw new RuntimeError(101, ngDevMode && "ApplicationRef.tick is called recursively");
     }
+    const prevConsumer = setActiveConsumer(null);
     try {
       this._runningTick = true;
-      this.detectChangesInAttachedViews();
+      this.detectChangesInAttachedViews(refreshViews);
       if (typeof ngDevMode === "undefined" || ngDevMode) {
         for (let view of this._views) {
           view.checkNoChanges();
@@ -22101,37 +21332,35 @@ var _ApplicationRef = class _ApplicationRef {
     } catch (e) {
       this.internalErrorHandler(e);
     } finally {
+      this.afterTick.next();
       this._runningTick = false;
+      setActiveConsumer(prevConsumer);
     }
   }
-  detectChangesInAttachedViews() {
+  detectChangesInAttachedViews(refreshViews) {
     let runs = 0;
-    do {
+    const afterRenderEffectManager = this.afterRenderEffectManager;
+    while (true) {
       if (runs === MAXIMUM_REFRESH_RERUNS) {
-        throw new RuntimeError(103, ngDevMode && "Changes in afterRender or afterNextRender hooks caused infinite change detection while refresh views.");
+        throw new RuntimeError(103, ngDevMode && "Infinite change detection while refreshing application views. Ensure afterRender or queueStateUpdate hooks are not continuously causing updates.");
       }
-      const isFirstPass = runs === 0;
-      for (let { _lView, notifyErrorHandler } of this._views) {
-        if (!isFirstPass && !shouldRecheckView(_lView)) {
-          continue;
+      if (refreshViews) {
+        const isFirstPass = runs === 0;
+        this.beforeRender.next(isFirstPass);
+        for (let { _lView, notifyErrorHandler } of this._views) {
+          detectChangesInViewIfRequired(_lView, isFirstPass, notifyErrorHandler);
         }
-        this.detectChangesInView(_lView, notifyErrorHandler, isFirstPass);
       }
-      this.afterRenderEffectManager.execute();
       runs++;
-    } while (this._views.some(({ _lView }) => shouldRecheckView(_lView)));
-  }
-  detectChangesInView(lView, notifyErrorHandler, isFirstPass) {
-    let mode;
-    if (isFirstPass) {
-      mode = 0;
-      lView[FLAGS] |= 1024;
-    } else if (lView[FLAGS] & 64) {
-      mode = 0;
-    } else {
-      mode = 1;
+      afterRenderEffectManager.executeInternalCallbacks();
+      if ([...this.externalTestViews.keys(), ...this._views].some(({ _lView }) => shouldRecheckView(_lView))) {
+        continue;
+      }
+      afterRenderEffectManager.execute();
+      if (![...this.externalTestViews.keys(), ...this._views].some(({ _lView }) => shouldRecheckView(_lView))) {
+        break;
+      }
     }
-    detectChangesInternal(lView, notifyErrorHandler, mode);
   }
   /**
    * Attaches a view so that it will be dirty checked.
@@ -22243,8 +21472,26 @@ function whenStable(applicationRef) {
   applicationRef.onDestroy(() => whenStableStore?.delete(applicationRef));
   return whenStablePromise;
 }
+function detectChangesInViewIfRequired(lView, isFirstPass, notifyErrorHandler) {
+  if (!isFirstPass && !shouldRecheckView(lView)) {
+    return;
+  }
+  detectChangesInView(lView, notifyErrorHandler, isFirstPass);
+}
 function shouldRecheckView(view) {
   return requiresRefreshOrTraversal(view);
+}
+function detectChangesInView(lView, notifyErrorHandler, isFirstPass) {
+  let mode;
+  if (isFirstPass) {
+    mode = 0;
+    lView[FLAGS] |= 1024;
+  } else if (lView[FLAGS] & 64) {
+    mode = 0;
+  } else {
+    mode = 1;
+  }
+  detectChangesInternal(lView, notifyErrorHandler, mode);
 }
 var ModuleWithComponentFactories = class {
   constructor(ngModuleFactory, componentFactories) {
@@ -22723,6 +21970,28 @@ function getNgModuleById(id) {
 function noModuleError(id) {
   return new Error(`No module with ID ${id} loaded`);
 }
+var _ChangeDetectorRef = class _ChangeDetectorRef {
+};
+_ChangeDetectorRef.__NG_ELEMENT_ID__ = injectChangeDetectorRef;
+var ChangeDetectorRef = _ChangeDetectorRef;
+function injectChangeDetectorRef(flags) {
+  return createViewRef(
+    getCurrentTNode(),
+    getLView(),
+    (flags & 16) === 16
+    /* InternalInjectFlags.ForPipe */
+  );
+}
+function createViewRef(tNode, lView, isPipe2) {
+  if (isComponentHost(tNode) && !isPipe2) {
+    const componentView = getComponentLViewByIndex(tNode.index, lView);
+    return new ViewRef$1(componentView, componentView);
+  } else if (tNode.type & (3 | 12 | 32)) {
+    const hostComponentView = lView[DECLARATION_COMPONENT_VIEW];
+    return new ViewRef$1(hostComponentView, lView);
+  }
+  return null;
+}
 var ViewRef = class extends ChangeDetectorRef {
 };
 var EmbeddedViewRef = class extends ViewRef {
@@ -23135,6 +22404,898 @@ function getDebugNode(nativeNode) {
   }
   return null;
 }
+var DefaultIterableDifferFactory = class {
+  constructor() {
+  }
+  supports(obj) {
+    return isListLikeIterable(obj);
+  }
+  create(trackByFn) {
+    return new DefaultIterableDiffer(trackByFn);
+  }
+};
+var trackByIdentity = (index, item) => item;
+var DefaultIterableDiffer = class {
+  constructor(trackByFn) {
+    this.length = 0;
+    this._linkedRecords = null;
+    this._unlinkedRecords = null;
+    this._previousItHead = null;
+    this._itHead = null;
+    this._itTail = null;
+    this._additionsHead = null;
+    this._additionsTail = null;
+    this._movesHead = null;
+    this._movesTail = null;
+    this._removalsHead = null;
+    this._removalsTail = null;
+    this._identityChangesHead = null;
+    this._identityChangesTail = null;
+    this._trackByFn = trackByFn || trackByIdentity;
+  }
+  forEachItem(fn) {
+    let record;
+    for (record = this._itHead; record !== null; record = record._next) {
+      fn(record);
+    }
+  }
+  forEachOperation(fn) {
+    let nextIt = this._itHead;
+    let nextRemove = this._removalsHead;
+    let addRemoveOffset = 0;
+    let moveOffsets = null;
+    while (nextIt || nextRemove) {
+      const record = !nextRemove || nextIt && nextIt.currentIndex < getPreviousIndex(nextRemove, addRemoveOffset, moveOffsets) ? nextIt : nextRemove;
+      const adjPreviousIndex = getPreviousIndex(record, addRemoveOffset, moveOffsets);
+      const currentIndex = record.currentIndex;
+      if (record === nextRemove) {
+        addRemoveOffset--;
+        nextRemove = nextRemove._nextRemoved;
+      } else {
+        nextIt = nextIt._next;
+        if (record.previousIndex == null) {
+          addRemoveOffset++;
+        } else {
+          if (!moveOffsets)
+            moveOffsets = [];
+          const localMovePreviousIndex = adjPreviousIndex - addRemoveOffset;
+          const localCurrentIndex = currentIndex - addRemoveOffset;
+          if (localMovePreviousIndex != localCurrentIndex) {
+            for (let i = 0; i < localMovePreviousIndex; i++) {
+              const offset = i < moveOffsets.length ? moveOffsets[i] : moveOffsets[i] = 0;
+              const index = offset + i;
+              if (localCurrentIndex <= index && index < localMovePreviousIndex) {
+                moveOffsets[i] = offset + 1;
+              }
+            }
+            const previousIndex = record.previousIndex;
+            moveOffsets[previousIndex] = localCurrentIndex - localMovePreviousIndex;
+          }
+        }
+      }
+      if (adjPreviousIndex !== currentIndex) {
+        fn(record, adjPreviousIndex, currentIndex);
+      }
+    }
+  }
+  forEachPreviousItem(fn) {
+    let record;
+    for (record = this._previousItHead; record !== null; record = record._nextPrevious) {
+      fn(record);
+    }
+  }
+  forEachAddedItem(fn) {
+    let record;
+    for (record = this._additionsHead; record !== null; record = record._nextAdded) {
+      fn(record);
+    }
+  }
+  forEachMovedItem(fn) {
+    let record;
+    for (record = this._movesHead; record !== null; record = record._nextMoved) {
+      fn(record);
+    }
+  }
+  forEachRemovedItem(fn) {
+    let record;
+    for (record = this._removalsHead; record !== null; record = record._nextRemoved) {
+      fn(record);
+    }
+  }
+  forEachIdentityChange(fn) {
+    let record;
+    for (record = this._identityChangesHead; record !== null; record = record._nextIdentityChange) {
+      fn(record);
+    }
+  }
+  diff(collection) {
+    if (collection == null)
+      collection = [];
+    if (!isListLikeIterable(collection)) {
+      throw new RuntimeError(900, ngDevMode && `Error trying to diff '${stringify(collection)}'. Only arrays and iterables are allowed`);
+    }
+    if (this.check(collection)) {
+      return this;
+    } else {
+      return null;
+    }
+  }
+  onDestroy() {
+  }
+  check(collection) {
+    this._reset();
+    let record = this._itHead;
+    let mayBeDirty = false;
+    let index;
+    let item;
+    let itemTrackBy;
+    if (Array.isArray(collection)) {
+      this.length = collection.length;
+      for (let index2 = 0; index2 < this.length; index2++) {
+        item = collection[index2];
+        itemTrackBy = this._trackByFn(index2, item);
+        if (record === null || !Object.is(record.trackById, itemTrackBy)) {
+          record = this._mismatch(record, item, itemTrackBy, index2);
+          mayBeDirty = true;
+        } else {
+          if (mayBeDirty) {
+            record = this._verifyReinsertion(record, item, itemTrackBy, index2);
+          }
+          if (!Object.is(record.item, item))
+            this._addIdentityChange(record, item);
+        }
+        record = record._next;
+      }
+    } else {
+      index = 0;
+      iterateListLike(collection, (item2) => {
+        itemTrackBy = this._trackByFn(index, item2);
+        if (record === null || !Object.is(record.trackById, itemTrackBy)) {
+          record = this._mismatch(record, item2, itemTrackBy, index);
+          mayBeDirty = true;
+        } else {
+          if (mayBeDirty) {
+            record = this._verifyReinsertion(record, item2, itemTrackBy, index);
+          }
+          if (!Object.is(record.item, item2))
+            this._addIdentityChange(record, item2);
+        }
+        record = record._next;
+        index++;
+      });
+      this.length = index;
+    }
+    this._truncate(record);
+    this.collection = collection;
+    return this.isDirty;
+  }
+  /* CollectionChanges is considered dirty if it has any additions, moves, removals, or identity
+   * changes.
+   */
+  get isDirty() {
+    return this._additionsHead !== null || this._movesHead !== null || this._removalsHead !== null || this._identityChangesHead !== null;
+  }
+  /**
+   * Reset the state of the change objects to show no changes. This means set previousKey to
+   * currentKey, and clear all of the queues (additions, moves, removals).
+   * Set the previousIndexes of moved and added items to their currentIndexes
+   * Reset the list of additions, moves and removals
+   *
+   * @internal
+   */
+  _reset() {
+    if (this.isDirty) {
+      let record;
+      for (record = this._previousItHead = this._itHead; record !== null; record = record._next) {
+        record._nextPrevious = record._next;
+      }
+      for (record = this._additionsHead; record !== null; record = record._nextAdded) {
+        record.previousIndex = record.currentIndex;
+      }
+      this._additionsHead = this._additionsTail = null;
+      for (record = this._movesHead; record !== null; record = record._nextMoved) {
+        record.previousIndex = record.currentIndex;
+      }
+      this._movesHead = this._movesTail = null;
+      this._removalsHead = this._removalsTail = null;
+      this._identityChangesHead = this._identityChangesTail = null;
+    }
+  }
+  /**
+   * This is the core function which handles differences between collections.
+   *
+   * - `record` is the record which we saw at this position last time. If null then it is a new
+   *   item.
+   * - `item` is the current item in the collection
+   * - `index` is the position of the item in the collection
+   *
+   * @internal
+   */
+  _mismatch(record, item, itemTrackBy, index) {
+    let previousRecord;
+    if (record === null) {
+      previousRecord = this._itTail;
+    } else {
+      previousRecord = record._prev;
+      this._remove(record);
+    }
+    record = this._unlinkedRecords === null ? null : this._unlinkedRecords.get(itemTrackBy, null);
+    if (record !== null) {
+      if (!Object.is(record.item, item))
+        this._addIdentityChange(record, item);
+      this._reinsertAfter(record, previousRecord, index);
+    } else {
+      record = this._linkedRecords === null ? null : this._linkedRecords.get(itemTrackBy, index);
+      if (record !== null) {
+        if (!Object.is(record.item, item))
+          this._addIdentityChange(record, item);
+        this._moveAfter(record, previousRecord, index);
+      } else {
+        record = this._addAfter(new IterableChangeRecord_(item, itemTrackBy), previousRecord, index);
+      }
+    }
+    return record;
+  }
+  /**
+   * This check is only needed if an array contains duplicates. (Short circuit of nothing dirty)
+   *
+   * Use case: `[a, a]` => `[b, a, a]`
+   *
+   * If we did not have this check then the insertion of `b` would:
+   *   1) evict first `a`
+   *   2) insert `b` at `0` index.
+   *   3) leave `a` at index `1` as is. <-- this is wrong!
+   *   3) reinsert `a` at index 2. <-- this is wrong!
+   *
+   * The correct behavior is:
+   *   1) evict first `a`
+   *   2) insert `b` at `0` index.
+   *   3) reinsert `a` at index 1.
+   *   3) move `a` at from `1` to `2`.
+   *
+   *
+   * Double check that we have not evicted a duplicate item. We need to check if the item type may
+   * have already been removed:
+   * The insertion of b will evict the first 'a'. If we don't reinsert it now it will be reinserted
+   * at the end. Which will show up as the two 'a's switching position. This is incorrect, since a
+   * better way to think of it is as insert of 'b' rather then switch 'a' with 'b' and then add 'a'
+   * at the end.
+   *
+   * @internal
+   */
+  _verifyReinsertion(record, item, itemTrackBy, index) {
+    let reinsertRecord = this._unlinkedRecords === null ? null : this._unlinkedRecords.get(itemTrackBy, null);
+    if (reinsertRecord !== null) {
+      record = this._reinsertAfter(reinsertRecord, record._prev, index);
+    } else if (record.currentIndex != index) {
+      record.currentIndex = index;
+      this._addToMoves(record, index);
+    }
+    return record;
+  }
+  /**
+   * Get rid of any excess {@link IterableChangeRecord_}s from the previous collection
+   *
+   * - `record` The first excess {@link IterableChangeRecord_}.
+   *
+   * @internal
+   */
+  _truncate(record) {
+    while (record !== null) {
+      const nextRecord = record._next;
+      this._addToRemovals(this._unlink(record));
+      record = nextRecord;
+    }
+    if (this._unlinkedRecords !== null) {
+      this._unlinkedRecords.clear();
+    }
+    if (this._additionsTail !== null) {
+      this._additionsTail._nextAdded = null;
+    }
+    if (this._movesTail !== null) {
+      this._movesTail._nextMoved = null;
+    }
+    if (this._itTail !== null) {
+      this._itTail._next = null;
+    }
+    if (this._removalsTail !== null) {
+      this._removalsTail._nextRemoved = null;
+    }
+    if (this._identityChangesTail !== null) {
+      this._identityChangesTail._nextIdentityChange = null;
+    }
+  }
+  /** @internal */
+  _reinsertAfter(record, prevRecord, index) {
+    if (this._unlinkedRecords !== null) {
+      this._unlinkedRecords.remove(record);
+    }
+    const prev = record._prevRemoved;
+    const next = record._nextRemoved;
+    if (prev === null) {
+      this._removalsHead = next;
+    } else {
+      prev._nextRemoved = next;
+    }
+    if (next === null) {
+      this._removalsTail = prev;
+    } else {
+      next._prevRemoved = prev;
+    }
+    this._insertAfter(record, prevRecord, index);
+    this._addToMoves(record, index);
+    return record;
+  }
+  /** @internal */
+  _moveAfter(record, prevRecord, index) {
+    this._unlink(record);
+    this._insertAfter(record, prevRecord, index);
+    this._addToMoves(record, index);
+    return record;
+  }
+  /** @internal */
+  _addAfter(record, prevRecord, index) {
+    this._insertAfter(record, prevRecord, index);
+    if (this._additionsTail === null) {
+      this._additionsTail = this._additionsHead = record;
+    } else {
+      this._additionsTail = this._additionsTail._nextAdded = record;
+    }
+    return record;
+  }
+  /** @internal */
+  _insertAfter(record, prevRecord, index) {
+    const next = prevRecord === null ? this._itHead : prevRecord._next;
+    record._next = next;
+    record._prev = prevRecord;
+    if (next === null) {
+      this._itTail = record;
+    } else {
+      next._prev = record;
+    }
+    if (prevRecord === null) {
+      this._itHead = record;
+    } else {
+      prevRecord._next = record;
+    }
+    if (this._linkedRecords === null) {
+      this._linkedRecords = new _DuplicateMap();
+    }
+    this._linkedRecords.put(record);
+    record.currentIndex = index;
+    return record;
+  }
+  /** @internal */
+  _remove(record) {
+    return this._addToRemovals(this._unlink(record));
+  }
+  /** @internal */
+  _unlink(record) {
+    if (this._linkedRecords !== null) {
+      this._linkedRecords.remove(record);
+    }
+    const prev = record._prev;
+    const next = record._next;
+    if (prev === null) {
+      this._itHead = next;
+    } else {
+      prev._next = next;
+    }
+    if (next === null) {
+      this._itTail = prev;
+    } else {
+      next._prev = prev;
+    }
+    return record;
+  }
+  /** @internal */
+  _addToMoves(record, toIndex) {
+    if (record.previousIndex === toIndex) {
+      return record;
+    }
+    if (this._movesTail === null) {
+      this._movesTail = this._movesHead = record;
+    } else {
+      this._movesTail = this._movesTail._nextMoved = record;
+    }
+    return record;
+  }
+  _addToRemovals(record) {
+    if (this._unlinkedRecords === null) {
+      this._unlinkedRecords = new _DuplicateMap();
+    }
+    this._unlinkedRecords.put(record);
+    record.currentIndex = null;
+    record._nextRemoved = null;
+    if (this._removalsTail === null) {
+      this._removalsTail = this._removalsHead = record;
+      record._prevRemoved = null;
+    } else {
+      record._prevRemoved = this._removalsTail;
+      this._removalsTail = this._removalsTail._nextRemoved = record;
+    }
+    return record;
+  }
+  /** @internal */
+  _addIdentityChange(record, item) {
+    record.item = item;
+    if (this._identityChangesTail === null) {
+      this._identityChangesTail = this._identityChangesHead = record;
+    } else {
+      this._identityChangesTail = this._identityChangesTail._nextIdentityChange = record;
+    }
+    return record;
+  }
+};
+var IterableChangeRecord_ = class {
+  constructor(item, trackById) {
+    this.item = item;
+    this.trackById = trackById;
+    this.currentIndex = null;
+    this.previousIndex = null;
+    this._nextPrevious = null;
+    this._prev = null;
+    this._next = null;
+    this._prevDup = null;
+    this._nextDup = null;
+    this._prevRemoved = null;
+    this._nextRemoved = null;
+    this._nextAdded = null;
+    this._nextMoved = null;
+    this._nextIdentityChange = null;
+  }
+};
+var _DuplicateItemRecordList = class {
+  constructor() {
+    this._head = null;
+    this._tail = null;
+  }
+  /**
+   * Append the record to the list of duplicates.
+   *
+   * Note: by design all records in the list of duplicates hold the same value in record.item.
+   */
+  add(record) {
+    if (this._head === null) {
+      this._head = this._tail = record;
+      record._nextDup = null;
+      record._prevDup = null;
+    } else {
+      this._tail._nextDup = record;
+      record._prevDup = this._tail;
+      record._nextDup = null;
+      this._tail = record;
+    }
+  }
+  // Returns a IterableChangeRecord_ having IterableChangeRecord_.trackById == trackById and
+  // IterableChangeRecord_.currentIndex >= atOrAfterIndex
+  get(trackById, atOrAfterIndex) {
+    let record;
+    for (record = this._head; record !== null; record = record._nextDup) {
+      if ((atOrAfterIndex === null || atOrAfterIndex <= record.currentIndex) && Object.is(record.trackById, trackById)) {
+        return record;
+      }
+    }
+    return null;
+  }
+  /**
+   * Remove one {@link IterableChangeRecord_} from the list of duplicates.
+   *
+   * Returns whether the list of duplicates is empty.
+   */
+  remove(record) {
+    const prev = record._prevDup;
+    const next = record._nextDup;
+    if (prev === null) {
+      this._head = next;
+    } else {
+      prev._nextDup = next;
+    }
+    if (next === null) {
+      this._tail = prev;
+    } else {
+      next._prevDup = prev;
+    }
+    return this._head === null;
+  }
+};
+var _DuplicateMap = class {
+  constructor() {
+    this.map = /* @__PURE__ */ new Map();
+  }
+  put(record) {
+    const key = record.trackById;
+    let duplicates = this.map.get(key);
+    if (!duplicates) {
+      duplicates = new _DuplicateItemRecordList();
+      this.map.set(key, duplicates);
+    }
+    duplicates.add(record);
+  }
+  /**
+   * Retrieve the `value` using key. Because the IterableChangeRecord_ value may be one which we
+   * have already iterated over, we use the `atOrAfterIndex` to pretend it is not there.
+   *
+   * Use case: `[a, b, c, a, a]` if we are at index `3` which is the second `a` then asking if we
+   * have any more `a`s needs to return the second `a`.
+   */
+  get(trackById, atOrAfterIndex) {
+    const key = trackById;
+    const recordList = this.map.get(key);
+    return recordList ? recordList.get(trackById, atOrAfterIndex) : null;
+  }
+  /**
+   * Removes a {@link IterableChangeRecord_} from the list of duplicates.
+   *
+   * The list of duplicates also is removed from the map if it gets empty.
+   */
+  remove(record) {
+    const key = record.trackById;
+    const recordList = this.map.get(key);
+    if (recordList.remove(record)) {
+      this.map.delete(key);
+    }
+    return record;
+  }
+  get isEmpty() {
+    return this.map.size === 0;
+  }
+  clear() {
+    this.map.clear();
+  }
+};
+function getPreviousIndex(item, addRemoveOffset, moveOffsets) {
+  const previousIndex = item.previousIndex;
+  if (previousIndex === null)
+    return previousIndex;
+  let moveOffset = 0;
+  if (moveOffsets && previousIndex < moveOffsets.length) {
+    moveOffset = moveOffsets[previousIndex];
+  }
+  return previousIndex + addRemoveOffset + moveOffset;
+}
+var DefaultKeyValueDifferFactory = class {
+  constructor() {
+  }
+  supports(obj) {
+    return obj instanceof Map || isJsObject(obj);
+  }
+  create() {
+    return new DefaultKeyValueDiffer();
+  }
+};
+var DefaultKeyValueDiffer = class {
+  constructor() {
+    this._records = /* @__PURE__ */ new Map();
+    this._mapHead = null;
+    this._appendAfter = null;
+    this._previousMapHead = null;
+    this._changesHead = null;
+    this._changesTail = null;
+    this._additionsHead = null;
+    this._additionsTail = null;
+    this._removalsHead = null;
+    this._removalsTail = null;
+  }
+  get isDirty() {
+    return this._additionsHead !== null || this._changesHead !== null || this._removalsHead !== null;
+  }
+  forEachItem(fn) {
+    let record;
+    for (record = this._mapHead; record !== null; record = record._next) {
+      fn(record);
+    }
+  }
+  forEachPreviousItem(fn) {
+    let record;
+    for (record = this._previousMapHead; record !== null; record = record._nextPrevious) {
+      fn(record);
+    }
+  }
+  forEachChangedItem(fn) {
+    let record;
+    for (record = this._changesHead; record !== null; record = record._nextChanged) {
+      fn(record);
+    }
+  }
+  forEachAddedItem(fn) {
+    let record;
+    for (record = this._additionsHead; record !== null; record = record._nextAdded) {
+      fn(record);
+    }
+  }
+  forEachRemovedItem(fn) {
+    let record;
+    for (record = this._removalsHead; record !== null; record = record._nextRemoved) {
+      fn(record);
+    }
+  }
+  diff(map2) {
+    if (!map2) {
+      map2 = /* @__PURE__ */ new Map();
+    } else if (!(map2 instanceof Map || isJsObject(map2))) {
+      throw new RuntimeError(900, ngDevMode && `Error trying to diff '${stringify(map2)}'. Only maps and objects are allowed`);
+    }
+    return this.check(map2) ? this : null;
+  }
+  onDestroy() {
+  }
+  /**
+   * Check the current state of the map vs the previous.
+   * The algorithm is optimised for when the keys do no change.
+   */
+  check(map2) {
+    this._reset();
+    let insertBefore = this._mapHead;
+    this._appendAfter = null;
+    this._forEach(map2, (value, key) => {
+      if (insertBefore && insertBefore.key === key) {
+        this._maybeAddToChanges(insertBefore, value);
+        this._appendAfter = insertBefore;
+        insertBefore = insertBefore._next;
+      } else {
+        const record = this._getOrCreateRecordForKey(key, value);
+        insertBefore = this._insertBeforeOrAppend(insertBefore, record);
+      }
+    });
+    if (insertBefore) {
+      if (insertBefore._prev) {
+        insertBefore._prev._next = null;
+      }
+      this._removalsHead = insertBefore;
+      for (let record = insertBefore; record !== null; record = record._nextRemoved) {
+        if (record === this._mapHead) {
+          this._mapHead = null;
+        }
+        this._records.delete(record.key);
+        record._nextRemoved = record._next;
+        record.previousValue = record.currentValue;
+        record.currentValue = null;
+        record._prev = null;
+        record._next = null;
+      }
+    }
+    if (this._changesTail)
+      this._changesTail._nextChanged = null;
+    if (this._additionsTail)
+      this._additionsTail._nextAdded = null;
+    return this.isDirty;
+  }
+  /**
+   * Inserts a record before `before` or append at the end of the list when `before` is null.
+   *
+   * Notes:
+   * - This method appends at `this._appendAfter`,
+   * - This method updates `this._appendAfter`,
+   * - The return value is the new value for the insertion pointer.
+   */
+  _insertBeforeOrAppend(before, record) {
+    if (before) {
+      const prev = before._prev;
+      record._next = before;
+      record._prev = prev;
+      before._prev = record;
+      if (prev) {
+        prev._next = record;
+      }
+      if (before === this._mapHead) {
+        this._mapHead = record;
+      }
+      this._appendAfter = before;
+      return before;
+    }
+    if (this._appendAfter) {
+      this._appendAfter._next = record;
+      record._prev = this._appendAfter;
+    } else {
+      this._mapHead = record;
+    }
+    this._appendAfter = record;
+    return null;
+  }
+  _getOrCreateRecordForKey(key, value) {
+    if (this._records.has(key)) {
+      const record2 = this._records.get(key);
+      this._maybeAddToChanges(record2, value);
+      const prev = record2._prev;
+      const next = record2._next;
+      if (prev) {
+        prev._next = next;
+      }
+      if (next) {
+        next._prev = prev;
+      }
+      record2._next = null;
+      record2._prev = null;
+      return record2;
+    }
+    const record = new KeyValueChangeRecord_(key);
+    this._records.set(key, record);
+    record.currentValue = value;
+    this._addToAdditions(record);
+    return record;
+  }
+  /** @internal */
+  _reset() {
+    if (this.isDirty) {
+      let record;
+      this._previousMapHead = this._mapHead;
+      for (record = this._previousMapHead; record !== null; record = record._next) {
+        record._nextPrevious = record._next;
+      }
+      for (record = this._changesHead; record !== null; record = record._nextChanged) {
+        record.previousValue = record.currentValue;
+      }
+      for (record = this._additionsHead; record != null; record = record._nextAdded) {
+        record.previousValue = record.currentValue;
+      }
+      this._changesHead = this._changesTail = null;
+      this._additionsHead = this._additionsTail = null;
+      this._removalsHead = null;
+    }
+  }
+  // Add the record or a given key to the list of changes only when the value has actually changed
+  _maybeAddToChanges(record, newValue) {
+    if (!Object.is(newValue, record.currentValue)) {
+      record.previousValue = record.currentValue;
+      record.currentValue = newValue;
+      this._addToChanges(record);
+    }
+  }
+  _addToAdditions(record) {
+    if (this._additionsHead === null) {
+      this._additionsHead = this._additionsTail = record;
+    } else {
+      this._additionsTail._nextAdded = record;
+      this._additionsTail = record;
+    }
+  }
+  _addToChanges(record) {
+    if (this._changesHead === null) {
+      this._changesHead = this._changesTail = record;
+    } else {
+      this._changesTail._nextChanged = record;
+      this._changesTail = record;
+    }
+  }
+  /** @internal */
+  _forEach(obj, fn) {
+    if (obj instanceof Map) {
+      obj.forEach(fn);
+    } else {
+      Object.keys(obj).forEach((k) => fn(obj[k], k));
+    }
+  }
+};
+var KeyValueChangeRecord_ = class {
+  constructor(key) {
+    this.key = key;
+    this.previousValue = null;
+    this.currentValue = null;
+    this._nextPrevious = null;
+    this._next = null;
+    this._prev = null;
+    this._nextAdded = null;
+    this._nextRemoved = null;
+    this._nextChanged = null;
+  }
+};
+function defaultIterableDiffersFactory() {
+  return new IterableDiffers([new DefaultIterableDifferFactory()]);
+}
+var _IterableDiffers = class _IterableDiffers {
+  constructor(factories) {
+    this.factories = factories;
+  }
+  static create(factories, parent) {
+    if (parent != null) {
+      const copied = parent.factories.slice();
+      factories = factories.concat(copied);
+    }
+    return new _IterableDiffers(factories);
+  }
+  /**
+   * Takes an array of {@link IterableDifferFactory} and returns a provider used to extend the
+   * inherited {@link IterableDiffers} instance with the provided factories and return a new
+   * {@link IterableDiffers} instance.
+   *
+   * @usageNotes
+   * ### Example
+   *
+   * The following example shows how to extend an existing list of factories,
+   * which will only be applied to the injector for this component and its children.
+   * This step is all that's required to make a new {@link IterableDiffer} available.
+   *
+   * ```
+   * @Component({
+   *   viewProviders: [
+   *     IterableDiffers.extend([new ImmutableListDiffer()])
+   *   ]
+   * })
+   * ```
+   */
+  static extend(factories) {
+    return {
+      provide: _IterableDiffers,
+      useFactory: (parent) => {
+        return _IterableDiffers.create(factories, parent || defaultIterableDiffersFactory());
+      },
+      // Dependency technically isn't optional, but we can provide a better error message this way.
+      deps: [[_IterableDiffers, new SkipSelf(), new Optional()]]
+    };
+  }
+  find(iterable) {
+    const factory = this.factories.find((f) => f.supports(iterable));
+    if (factory != null) {
+      return factory;
+    } else {
+      throw new RuntimeError(901, ngDevMode && `Cannot find a differ supporting object '${iterable}' of type '${getTypeNameForDebugging(iterable)}'`);
+    }
+  }
+};
+_IterableDiffers.ɵprov = ɵɵdefineInjectable({ token: _IterableDiffers, providedIn: "root", factory: defaultIterableDiffersFactory });
+var IterableDiffers = _IterableDiffers;
+function getTypeNameForDebugging(type) {
+  return type["name"] || typeof type;
+}
+function defaultKeyValueDiffersFactory() {
+  return new KeyValueDiffers([new DefaultKeyValueDifferFactory()]);
+}
+var _KeyValueDiffers = class _KeyValueDiffers {
+  constructor(factories) {
+    this.factories = factories;
+  }
+  static create(factories, parent) {
+    if (parent) {
+      const copied = parent.factories.slice();
+      factories = factories.concat(copied);
+    }
+    return new _KeyValueDiffers(factories);
+  }
+  /**
+   * Takes an array of {@link KeyValueDifferFactory} and returns a provider used to extend the
+   * inherited {@link KeyValueDiffers} instance with the provided factories and return a new
+   * {@link KeyValueDiffers} instance.
+   *
+   * @usageNotes
+   * ### Example
+   *
+   * The following example shows how to extend an existing list of factories,
+   * which will only be applied to the injector for this component and its children.
+   * This step is all that's required to make a new {@link KeyValueDiffer} available.
+   *
+   * ```
+   * @Component({
+   *   viewProviders: [
+   *     KeyValueDiffers.extend([new ImmutableMapDiffer()])
+   *   ]
+   * })
+   * ```
+   */
+  static extend(factories) {
+    return {
+      provide: _KeyValueDiffers,
+      useFactory: (parent) => {
+        return _KeyValueDiffers.create(factories, parent || defaultKeyValueDiffersFactory());
+      },
+      // Dependency technically isn't optional, but we can provide a better error message this way.
+      deps: [[_KeyValueDiffers, new SkipSelf(), new Optional()]]
+    };
+  }
+  find(kv) {
+    const factory = this.factories.find((f) => f.supports(kv));
+    if (factory) {
+      return factory;
+    }
+    throw new RuntimeError(901, ngDevMode && `Cannot find a differ supporting object '${kv}'`);
+  }
+};
+_KeyValueDiffers.ɵprov = ɵɵdefineInjectable({ token: _KeyValueDiffers, providedIn: "root", factory: defaultKeyValueDiffersFactory });
+var KeyValueDiffers = _KeyValueDiffers;
+var keyValDiff = [new DefaultKeyValueDifferFactory()];
+var iterableDiff = [new DefaultIterableDifferFactory()];
+var defaultIterableDiffers = new IterableDiffers(iterableDiff);
+var defaultKeyValueDiffers = new KeyValueDiffers(keyValDiff);
 var platformCore = createPlatformFactory(null, "core", []);
 var _ApplicationModule = class _ApplicationModule {
   // Inject ApplicationRef to make it eager...
@@ -23486,10 +23647,13 @@ var _ChangeDetectionSchedulerImpl = class _ChangeDetectionSchedulerImpl {
     this.appRef = inject(ApplicationRef);
     this.taskService = inject(PendingTasks);
     this.pendingRenderTaskId = null;
+    this.shouldRefreshViews = false;
   }
-  notify() {
-    if (this.pendingRenderTaskId !== null)
+  notify(type = 0) {
+    this.shouldRefreshViews ||= type === 0;
+    if (this.pendingRenderTaskId !== null) {
       return;
+    }
     this.pendingRenderTaskId = this.taskService.add();
     this.raceTimeoutAndRequestAnimationFrame();
   }
@@ -23527,9 +23691,10 @@ var _ChangeDetectionSchedulerImpl = class _ChangeDetectionSchedulerImpl {
   tick() {
     try {
       if (!this.appRef.destroyed) {
-        this.appRef.tick();
+        this.appRef._tick(this.shouldRefreshViews);
       }
     } finally {
+      this.shouldRefreshViews = false;
       const taskId = this.pendingRenderTaskId;
       this.pendingRenderTaskId = null;
       this.taskService.remove(taskId);
@@ -23573,6 +23738,130 @@ function getDeferBlocks(lView, deferBlocks) {
     } else if (isLView(lView[i])) {
       getDeferBlocks(lView[i], deferBlocks);
     }
+  }
+}
+var isHydrationSupportEnabled = false;
+var _isI18nHydrationSupportEnabled = false;
+var APPLICATION_IS_STABLE_TIMEOUT = 1e4;
+function enableHydrationRuntimeSupport() {
+  if (!isHydrationSupportEnabled) {
+    isHydrationSupportEnabled = true;
+    enableRetrieveHydrationInfoImpl();
+    enableLocateOrCreateElementNodeImpl();
+    enableLocateOrCreateTextNodeImpl();
+    enableLocateOrCreateElementContainerNodeImpl();
+    enableLocateOrCreateContainerAnchorImpl();
+    enableLocateOrCreateContainerRefImpl();
+    enableFindMatchingDehydratedViewImpl();
+    enableApplyRootElementTransformImpl();
+    enableLocateOrCreateI18nNodeImpl();
+  }
+}
+function printHydrationStats(injector) {
+  const console2 = injector.get(Console);
+  const message = `Angular hydrated ${ngDevMode.hydratedComponents} component(s) and ${ngDevMode.hydratedNodes} node(s), ${ngDevMode.componentsSkippedHydration} component(s) were skipped. Learn more at https://angular.io/guide/hydration.`;
+  console2.log(message);
+}
+function whenStableWithTimeout(appRef, injector) {
+  const whenStablePromise = whenStable(appRef);
+  if (typeof ngDevMode !== "undefined" && ngDevMode) {
+    const timeoutTime = APPLICATION_IS_STABLE_TIMEOUT;
+    const console2 = injector.get(Console);
+    const ngZone = injector.get(NgZone);
+    const timeoutId = ngZone.runOutsideAngular(() => {
+      return setTimeout(() => logWarningOnStableTimedout(timeoutTime, console2), timeoutTime);
+    });
+    whenStablePromise.finally(() => clearTimeout(timeoutId));
+  }
+  return whenStablePromise;
+}
+function withDomHydration() {
+  return makeEnvironmentProviders([
+    {
+      provide: IS_HYDRATION_DOM_REUSE_ENABLED,
+      useFactory: () => {
+        let isEnabled = true;
+        if (isPlatformBrowser()) {
+          const transferState = inject(TransferState, { optional: true });
+          isEnabled = !!transferState?.get(NGH_DATA_KEY, null);
+          if (!isEnabled && (typeof ngDevMode !== "undefined" && ngDevMode)) {
+            const console2 = inject(Console);
+            const message = formatRuntimeError(-505, "Angular hydration was requested on the client, but there was no serialized information present in the server response, thus hydration was not enabled. Make sure the `provideClientHydration()` is included into the list of providers in the server part of the application configuration.");
+            console2.warn(message);
+          }
+        }
+        if (isEnabled) {
+          performanceMarkFeature("NgHydration");
+        }
+        return isEnabled;
+      }
+    },
+    {
+      provide: ENVIRONMENT_INITIALIZER,
+      useValue: () => {
+        _isI18nHydrationSupportEnabled = !!inject(IS_I18N_HYDRATION_ENABLED, { optional: true });
+        if (isPlatformBrowser() && inject(IS_HYDRATION_DOM_REUSE_ENABLED)) {
+          verifySsrContentsIntegrity();
+          enableHydrationRuntimeSupport();
+        }
+      },
+      multi: true
+    },
+    {
+      provide: PRESERVE_HOST_CONTENT,
+      useFactory: () => {
+        return isPlatformBrowser() && inject(IS_HYDRATION_DOM_REUSE_ENABLED);
+      }
+    },
+    {
+      provide: APP_BOOTSTRAP_LISTENER,
+      useFactory: () => {
+        if (isPlatformBrowser() && inject(IS_HYDRATION_DOM_REUSE_ENABLED)) {
+          const appRef = inject(ApplicationRef);
+          const injector = inject(Injector);
+          return () => {
+            whenStableWithTimeout(appRef, injector).then(() => {
+              NgZone.assertInAngularZone();
+              cleanupDehydratedViews(appRef);
+              if (typeof ngDevMode !== "undefined" && ngDevMode) {
+                printHydrationStats(injector);
+              }
+            });
+          };
+        }
+        return () => {
+        };
+      },
+      multi: true
+    }
+  ]);
+}
+function withI18nHydration() {
+  return makeEnvironmentProviders([
+    {
+      provide: IS_I18N_HYDRATION_ENABLED,
+      useValue: true
+    }
+  ]);
+}
+function isI18nHydrationSupportEnabled() {
+  return _isI18nHydrationSupportEnabled;
+}
+function logWarningOnStableTimedout(time, console2) {
+  const message = `Angular hydration expected the ApplicationRef.isStable() to emit \`true\`, but it didn't happen within ${time}ms. Angular hydration logic depends on the application becoming stable as a signal to complete hydration process.`;
+  console2.warn(formatRuntimeError(-506, message));
+}
+function verifySsrContentsIntegrity() {
+  const doc = getDocument();
+  let hydrationMarker;
+  for (const node of doc.body.childNodes) {
+    if (node.nodeType === Node.COMMENT_NODE && node.textContent?.trim() === SSR_CONTENT_INTEGRITY_MARKER) {
+      hydrationMarker = node;
+      break;
+    }
+  }
+  if (!hydrationMarker) {
+    throw new RuntimeError(-507, typeof ngDevMode !== "undefined" && ngDevMode && "Angular hydration logic detected that HTML content of this page was modified after it was produced during server side rendering. Make sure that there are no optimizations that remove comment nodes from HTML enabled on your CDN. Angular hydration relies on HTML produced by the server, including whitespaces and comment nodes.");
   }
 }
 var SerializedViewCollection = class {
@@ -23808,7 +24097,7 @@ function componentUsesShadowDomEncapsulation(lView) {
 }
 function annotateHostElementForHydration(element, lView, context2) {
   const renderer = lView[RENDERER];
-  if (hasI18n(lView) || componentUsesShadowDomEncapsulation(lView)) {
+  if (hasI18n(lView) && !isI18nHydrationSupportEnabled() || componentUsesShadowDomEncapsulation(lView)) {
     renderer.setAttribute(element, SKIP_HYDRATION_ATTR_NAME, "");
     return null;
   } else {
@@ -23833,115 +24122,19 @@ function isContentProjectedNode(tNode) {
   }
   return false;
 }
-var isHydrationSupportEnabled = false;
-var APPLICATION_IS_STABLE_TIMEOUT = 1e4;
-function enableHydrationRuntimeSupport() {
-  if (!isHydrationSupportEnabled) {
-    isHydrationSupportEnabled = true;
-    enableRetrieveHydrationInfoImpl();
-    enableLocateOrCreateElementNodeImpl();
-    enableLocateOrCreateTextNodeImpl();
-    enableLocateOrCreateElementContainerNodeImpl();
-    enableLocateOrCreateContainerAnchorImpl();
-    enableLocateOrCreateContainerRefImpl();
-    enableFindMatchingDehydratedViewImpl();
-    enableApplyRootElementTransformImpl();
-  }
-}
-function printHydrationStats(injector) {
-  const console2 = injector.get(Console);
-  const message = `Angular hydrated ${ngDevMode.hydratedComponents} component(s) and ${ngDevMode.hydratedNodes} node(s), ${ngDevMode.componentsSkippedHydration} component(s) were skipped. Learn more at https://angular.io/guide/hydration.`;
-  console2.log(message);
-}
-function whenStableWithTimeout(appRef, injector) {
-  const whenStablePromise = whenStable(appRef);
-  if (typeof ngDevMode !== "undefined" && ngDevMode) {
-    const timeoutTime = APPLICATION_IS_STABLE_TIMEOUT;
-    const console2 = injector.get(Console);
-    const ngZone = injector.get(NgZone);
-    const timeoutId = ngZone.runOutsideAngular(() => {
-      return setTimeout(() => logWarningOnStableTimedout(timeoutTime, console2), timeoutTime);
-    });
-    whenStablePromise.finally(() => clearTimeout(timeoutId));
-  }
-  return whenStablePromise;
-}
-function withDomHydration() {
-  return makeEnvironmentProviders([
-    {
-      provide: IS_HYDRATION_DOM_REUSE_ENABLED,
-      useFactory: () => {
-        let isEnabled = true;
-        if (isPlatformBrowser()) {
-          const transferState = inject(TransferState, { optional: true });
-          isEnabled = !!transferState?.get(NGH_DATA_KEY, null);
-          if (!isEnabled && (typeof ngDevMode !== "undefined" && ngDevMode)) {
-            const console2 = inject(Console);
-            const message = formatRuntimeError(-505, "Angular hydration was requested on the client, but there was no serialized information present in the server response, thus hydration was not enabled. Make sure the `provideClientHydration()` is included into the list of providers in the server part of the application configuration.");
-            console2.warn(message);
-          }
-        }
-        if (isEnabled) {
-          performanceMarkFeature("NgHydration");
-        }
-        return isEnabled;
-      }
-    },
-    {
-      provide: ENVIRONMENT_INITIALIZER,
-      useValue: () => {
-        if (isPlatformBrowser() && inject(IS_HYDRATION_DOM_REUSE_ENABLED)) {
-          verifySsrContentsIntegrity();
-          enableHydrationRuntimeSupport();
-        }
-      },
-      multi: true
-    },
-    {
-      provide: PRESERVE_HOST_CONTENT,
-      useFactory: () => {
-        return isPlatformBrowser() && inject(IS_HYDRATION_DOM_REUSE_ENABLED);
-      }
-    },
-    {
-      provide: APP_BOOTSTRAP_LISTENER,
-      useFactory: () => {
-        if (isPlatformBrowser() && inject(IS_HYDRATION_DOM_REUSE_ENABLED)) {
-          const appRef = inject(ApplicationRef);
-          const injector = inject(Injector);
-          return () => {
-            whenStableWithTimeout(appRef, injector).then(() => {
-              NgZone.assertInAngularZone();
-              cleanupDehydratedViews(appRef);
-              if (typeof ngDevMode !== "undefined" && ngDevMode) {
-                printHydrationStats(injector);
-              }
-            });
-          };
-        }
-        return () => {
-        };
-      },
-      multi: true
-    }
-  ]);
-}
-function logWarningOnStableTimedout(time, console2) {
-  const message = `Angular hydration expected the ApplicationRef.isStable() to emit \`true\`, but it didn't happen within ${time}ms. Angular hydration logic depends on the application becoming stable as a signal to complete hydration process.`;
-  console2.warn(formatRuntimeError(-506, message));
-}
-function verifySsrContentsIntegrity() {
-  const doc = getDocument();
-  let hydrationMarker;
-  for (const node of doc.body.childNodes) {
-    if (node.nodeType === Node.COMMENT_NODE && node.textContent?.trim() === SSR_CONTENT_INTEGRITY_MARKER) {
-      hydrationMarker = node;
-      break;
-    }
-  }
-  if (!hydrationMarker) {
-    throw new RuntimeError(-507, typeof ngDevMode !== "undefined" && ngDevMode && "Angular hydration logic detected that HTML content of this page was modified after it was produced during server side rendering. Make sure that there are no optimizations that remove comment nodes from HTML enabled on your CDN. Angular hydration relies on HTML produced by the server, including whitespaces and comment nodes.");
-  }
+function queueStateUpdate(callback, options) {
+  !options && assertInInjectionContext(queueStateUpdate);
+  const injector = options?.injector ?? inject(Injector);
+  const appRef = injector.get(ApplicationRef);
+  let executed = false;
+  const runCallbackOnce = () => {
+    if (executed || appRef.destroyed)
+      return;
+    executed = true;
+    callback();
+  };
+  internalAfterNextRender(runCallbackOnce, { injector, runOnServer: true });
+  queueMicrotask(runCallbackOnce);
 }
 function booleanAttribute(value) {
   return typeof value === "boolean" ? value : value != null && value !== "false";
@@ -23998,6 +24191,135 @@ function ɵɵngDeclareNgModule(decl) {
 function ɵɵngDeclarePipe(decl) {
   const compiler = getCompilerFacade({ usage: 1, kind: "pipe", type: decl.type });
   return compiler.compilePipeDeclaration(angularCoreEnv, `ng:///${decl.type.name}/ɵpipe.js`, decl);
+}
+function computed(computation, options) {
+  performanceMarkFeature("NgSignals");
+  const getter = createComputed(computation);
+  if (options?.equal) {
+    getter[SIGNAL].equal = options.equal;
+  }
+  if (ngDevMode) {
+    getter.toString = () => `[Computed: ${getter()}]`;
+  }
+  return getter;
+}
+function untracked(nonReactiveReadsFn) {
+  const prevConsumer = setActiveConsumer(null);
+  try {
+    return nonReactiveReadsFn();
+  } finally {
+    setActiveConsumer(prevConsumer);
+  }
+}
+var APP_EFFECT_SCHEDULER = new InjectionToken("", {
+  providedIn: "root",
+  factory: () => inject(EffectScheduler)
+});
+var _EffectScheduler = class _EffectScheduler {
+};
+_EffectScheduler.ɵprov = ɵɵdefineInjectable({
+  token: _EffectScheduler,
+  providedIn: "root",
+  factory: () => new ZoneAwareEffectScheduler()
+});
+var EffectScheduler = _EffectScheduler;
+var ZoneAwareEffectScheduler = class {
+  constructor() {
+    this.queuedEffectCount = 0;
+    this.queues = /* @__PURE__ */ new Map();
+    this.pendingTasks = inject(PendingTasks);
+    this.taskId = null;
+  }
+  scheduleEffect(handle) {
+    this.enqueue(handle);
+    if (this.taskId === null) {
+      const taskId = this.taskId = this.pendingTasks.add();
+      queueMicrotask(() => {
+        this.flush();
+        this.pendingTasks.remove(taskId);
+        this.taskId = null;
+      });
+    }
+  }
+  enqueue(handle) {
+    const zone = handle.creationZone;
+    if (!this.queues.has(zone)) {
+      this.queues.set(zone, /* @__PURE__ */ new Set());
+    }
+    const queue2 = this.queues.get(zone);
+    if (queue2.has(handle)) {
+      return;
+    }
+    this.queuedEffectCount++;
+    queue2.add(handle);
+  }
+  /**
+   * Run all scheduled effects.
+   *
+   * Execution order of effects within the same zone is guaranteed to be FIFO, but there is no
+   * ordering guarantee between effects scheduled in different zones.
+   */
+  flush() {
+    while (this.queuedEffectCount > 0) {
+      for (const [zone, queue2] of this.queues) {
+        if (zone === null) {
+          this.flushQueue(queue2);
+        } else {
+          zone.run(() => this.flushQueue(queue2));
+        }
+      }
+    }
+  }
+  flushQueue(queue2) {
+    for (const handle of queue2) {
+      queue2.delete(handle);
+      this.queuedEffectCount--;
+      handle.run();
+    }
+  }
+};
+var EffectHandle = class {
+  constructor(scheduler, effectFn, creationZone, destroyRef, injector, allowSignalWrites) {
+    this.scheduler = scheduler;
+    this.effectFn = effectFn;
+    this.creationZone = creationZone;
+    this.injector = injector;
+    this.watcher = createWatch((onCleanup) => this.runEffect(onCleanup), () => this.schedule(), allowSignalWrites);
+    this.unregisterOnDestroy = destroyRef?.onDestroy(() => this.destroy());
+  }
+  runEffect(onCleanup) {
+    try {
+      this.effectFn(onCleanup);
+    } catch (err) {
+      const errorHandler = this.injector.get(ErrorHandler, null, { optional: true });
+      errorHandler?.handleError(err);
+    }
+  }
+  run() {
+    this.watcher.run();
+  }
+  schedule() {
+    this.scheduler.scheduleEffect(this);
+  }
+  destroy() {
+    this.watcher.destroy();
+    this.unregisterOnDestroy?.();
+  }
+};
+function effect(effectFn, options) {
+  performanceMarkFeature("NgSignals");
+  ngDevMode && assertNotInReactiveContext(effect, "Call `effect` outside of a reactive context. For example, schedule the effect inside the component constructor.");
+  !options?.injector && assertInInjectionContext(effect);
+  const injector = options?.injector ?? inject(Injector);
+  const destroyRef = options?.manualCleanup !== true ? injector.get(DestroyRef) : null;
+  const handle = new EffectHandle(injector.get(APP_EFFECT_SCHEDULER), effectFn, typeof Zone === "undefined" ? null : Zone.current, destroyRef, injector, options?.allowSignalWrites ?? false);
+  const cdr = injector.get(ChangeDetectorRef, null, { optional: true });
+  if (!cdr || !(cdr._lView[FLAGS] & 8)) {
+    handle.watcher.notify();
+  } else {
+    (cdr._lView[EFFECTS_TO_SCHEDULE] ??= []).push(handle.watcher.notify);
+  }
+  return handle;
 }
 function createComponent(component, options) {
   ngDevMode && assertComponentDef(component);
@@ -24101,40 +24423,12 @@ export {
   RuntimeError,
   formatRuntimeError,
   ɵINPUT_SIGNAL_BRAND_WRITE_TYPE,
-  EventEmitter,
-  output,
-  input,
-  InjectFlags,
-  stringify,
-  truncateMiddle,
-  ChangeDetectionStrategy,
-  ViewEncapsulation$1,
   noSideEffects,
   _global,
-  NG_COMP_DEF,
-  NG_DIR_DEF,
-  NG_PIPE_DEF,
-  NG_MOD_DEF,
-  NG_ELEMENT_ID,
-  InputFlags,
-  ɵɵdefineComponent,
-  ɵɵdefineNgModule,
-  ɵɵdefineDirective,
-  ɵɵdefinePipe,
-  isStandalone,
-  CONTAINER_HEADER_OFFSET,
-  getEnsureDirtyViewsAreAlwaysReachable,
-  setEnsureDirtyViewsAreAlwaysReachable,
-  ɵɵenableBindings,
-  ɵɵdisableBindings,
-  ɵɵrestoreView,
-  ɵɵresetView,
-  ɵɵnamespaceSVG,
-  ɵɵnamespaceMathML,
-  ɵɵnamespaceHTML,
-  ElementRef,
-  QueryList,
-  setDocument,
+  stringify,
+  truncateMiddle,
+  forwardRef,
+  resolveForwardRef,
   ɵɵdefineInjectable,
   defineInjectable,
   ɵɵdefineInjector,
@@ -24143,34 +24437,34 @@ export {
   NG_PROV_DEF,
   NG_INJ_DEF,
   InjectionToken,
-  APP_ID,
-  PLATFORM_INITIALIZER,
-  PLATFORM_ID,
-  PACKAGE_ROOT_URL,
-  ANIMATION_MODULE_TYPE,
-  CSP_NONCE,
-  IMAGE_CONFIG_DEFAULTS,
-  IMAGE_CONFIG,
-  forwardRef,
-  resolveForwardRef,
   setInjectorProfilerContext,
   isEnvironmentProviders,
+  NG_COMP_DEF,
+  NG_DIR_DEF,
+  NG_PIPE_DEF,
+  NG_MOD_DEF,
+  NG_ELEMENT_ID,
+  InjectFlags,
   setCurrentInjector,
   ɵɵinject,
   ɵɵinvalidFactoryDep,
   inject,
   convertToBitFlags,
-  makeStateKey,
-  TransferState,
-  SSR_CONTENT_INTEGRITY_MARKER,
-  readHydrationInfo,
   Inject,
   Optional,
   Self,
   SkipSelf,
   Host,
   ENVIRONMENT_INITIALIZER,
-  INJECTOR,
+  INJECTOR$1,
+  ChangeDetectionStrategy,
+  ViewEncapsulation$1,
+  InputFlags,
+  ɵɵdefineComponent,
+  ɵɵdefineNgModule,
+  ɵɵdefineDirective,
+  ɵɵdefinePipe,
+  isStandalone,
   makeEnvironmentProviders,
   importProvidersFrom,
   INJECTOR_SCOPE,
@@ -24180,15 +24474,47 @@ export {
   FactoryTarget,
   Type,
   ReflectionCapabilities,
+  CONTAINER_HEADER_OFFSET,
   SimpleChange,
   ɵɵNgOnChangesFeature,
+  getEnsureDirtyViewsAreAlwaysReachable,
+  setEnsureDirtyViewsAreAlwaysReachable,
+  ɵɵenableBindings,
+  ɵɵdisableBindings,
+  ɵɵrestoreView,
+  ɵɵresetView,
+  ɵɵnamespaceSVG,
+  ɵɵnamespaceMathML,
+  ɵɵnamespaceHTML,
   ɵɵgetInheritedFactory,
   ɵɵinjectAttribute,
   Attribute,
   Injectable,
   createInjector,
   Injector,
+  HostAttributeToken,
   ErrorHandler,
+  DestroyRef,
+  OutputEmitterRef,
+  getOutputDestroyRef,
+  output,
+  input,
+  ElementRef,
+  EventEmitter,
+  QueryList,
+  setDocument,
+  APP_ID,
+  PLATFORM_INITIALIZER,
+  PLATFORM_ID,
+  PACKAGE_ROOT_URL,
+  ANIMATION_MODULE_TYPE,
+  CSP_NONCE,
+  IMAGE_CONFIG_DEFAULTS,
+  IMAGE_CONFIG,
+  makeStateKey,
+  TransferState,
+  SSR_CONTENT_INTEGRITY_MARKER,
+  readHydrationInfo,
   IS_HYDRATION_DOM_REUSE_ENABLED,
   unwrapSafeValue,
   allowSanitizationBypassAndThrow,
@@ -24235,23 +24561,7 @@ export {
   Renderer2,
   Sanitizer,
   NOT_FOUND_CHECK_ONLY_ELEMENT_INJECTOR,
-  isSignal,
-  computed,
-  ɵunwrapWritableSignal,
-  signal,
-  untracked,
-  DefaultIterableDiffer,
-  IterableDiffers,
-  KeyValueDiffers,
-  devModeEqual,
-  ChangeDetectorRef,
-  injectChangeDetectorRef,
-  defaultIterableDiffers,
-  defaultKeyValueDiffers,
-  DestroyRef,
   assertNotInReactiveContext,
-  EffectScheduler,
-  effect,
   performanceMarkFeature,
   NgZone,
   NoopNgZone,
@@ -24267,6 +24577,9 @@ export {
   ComponentRef,
   LifecycleHooksFeature,
   ViewContainerRef,
+  isSignal,
+  ɵunwrapWritableSignal,
+  signal,
   viewChild,
   viewChildren,
   contentChild,
@@ -24288,9 +24601,6 @@ export {
   ɵɵCopyDefinitionFeature,
   ɵɵHostDirectivesFeature,
   ɵɵInputTransformsFeature,
-  getAsyncClassMetadataFn,
-  setClassMetadataAsync,
-  setClassMetadata,
   NgModuleRef$1,
   NgModuleFactory$1,
   createNgModule,
@@ -24298,7 +24608,11 @@ export {
   NgModuleRef,
   NgModuleFactory,
   createEnvironmentInjector,
+  getAsyncClassMetadataFn,
+  setClassMetadataAsync,
+  setClassMetadata,
   PendingTasks,
+  devModeEqual,
   ɵɵtemplate,
   DeferBlockState,
   DeferBlockBehavior,
@@ -24493,6 +24807,7 @@ export {
   NgProbeToken,
   ApplicationRef,
   whenStable,
+  detectChangesInViewIfRequired,
   ModuleWithComponentFactories,
   Compiler,
   COMPILER_OPTIONS,
@@ -24515,6 +24830,8 @@ export {
   enableProdMode,
   getModuleFactory,
   getNgModuleById,
+  ChangeDetectorRef,
+  injectChangeDetectorRef,
   ViewRef,
   EmbeddedViewRef,
   DebugEventListener,
@@ -24522,14 +24839,21 @@ export {
   DebugNode,
   DebugElement,
   getDebugNode,
+  DefaultIterableDiffer,
+  IterableDiffers,
+  KeyValueDiffers,
+  defaultIterableDiffers,
+  defaultKeyValueDiffers,
   platformCore,
   ApplicationModule,
   setAlternateWeakRefImpl,
   internalCreateApplication,
   provideZonelessChangeDetection,
   getDeferBlocks,
-  annotateForHydration,
   withDomHydration,
+  withI18nHydration,
+  annotateForHydration,
+  queueStateUpdate,
   booleanAttribute,
   numberAttribute,
   ɵɵngDeclareDirective,
@@ -24540,6 +24864,10 @@ export {
   ɵɵngDeclareInjector,
   ɵɵngDeclareNgModule,
   ɵɵngDeclarePipe,
+  computed,
+  untracked,
+  EffectScheduler,
+  effect,
   createComponent,
   reflectComponentType,
   mergeApplicationConfig
@@ -24548,16 +24876,25 @@ export {
 
 @angular/core/fesm2022/primitives/signals.mjs:
   (**
-   * @license Angular v17.2.2
+   * @license Angular v17.3.0
    * (c) 2010-2022 Google LLC. https://angular.io/
    * License: MIT
    *)
 
 @angular/core/fesm2022/core.mjs:
   (**
-   * @license Angular v17.2.2
+   * @license Angular v17.3.0
    * (c) 2010-2022 Google LLC. https://angular.io/
    * License: MIT
+   *)
+
+@angular/core/fesm2022/core.mjs:
+  (*!
+   * @license
+   * Copyright Google LLC All Rights Reserved.
+   *
+   * Use of this source code is governed by an MIT-style license that can be
+   * found in the LICENSE file at https://angular.io/license
    *)
 
 @angular/core/fesm2022/core.mjs:
@@ -24578,4 +24915,4 @@ export {
    * found in the LICENSE file at https://angular.io/license
    *)
 */
-//# sourceMappingURL=chunk-SFASAAZA.js.map
+//# sourceMappingURL=chunk-GSATQSWS.js.map
