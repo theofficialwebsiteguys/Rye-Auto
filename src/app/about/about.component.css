@@ -1,7 +1,7 @@
 /* hero.component.css */
 .hero-container {
     position: relative;
-    background-image: url('../../assets/AVIF/hero-img-1.avif');
+    background-image: url('../../assets/gallery/pic5.jpg');
     background-size: cover;
     background-position: center;
     height: 200px; /* Adjust based on your preference */
@@ -21,5 +21,19 @@
   /* Optional: If you want the title to stand out more */
   h1 {
     font-weight: bold;
+  }
+  
+  .featurette-divider {
+    margin: 5rem 0; /* Space out the Bootstrap <hr> more */
+  }
+
+  .featurette{
+    padding: 200px;
+  }
+  
+  /* Thin out the marketing headings */
+  /* rtl:begin:remove */
+  .featurette-heading {
+    letter-spacing: -.05rem;
   }
   
