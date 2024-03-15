@@ -16,10 +16,10 @@ declare var $: any;
 
 export class TestimonialsComponent {
   users = [{
-    name: 'Bruce Hardy',
-    role: 'Software Developer',
-    description: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit...',
-    image: 'https://i.imgur.com/PKHvlRS.jpg'
+    name: 'Michael Mezzio',
+    role: '',
+    description: 'Matt and his workers did a fantastic job. Started on time and kept to the schedule he told us even with a couple of rainy days. We even added in a couple of extra things and Matt’s reply each time was always “no problem “. We highly recommend him',
+    image: '/assets/Lynn_test.jpg'
   },
   {
     name: 'Mark Smith',
@@ -110,7 +110,14 @@ export class TestimonialsComponent {
     role: 'Software Architect',
     description: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit...',
     image: 'https://i.imgur.com/ACeArwY.jpg'
+  },
+  {
+    name: 'Brittany Lynn',
+    role: '',
+    description: 'We couldn\'t be happier with our retaining wall! Matt and his team were very professional, efficient and trustworthy!! We highly recommend them!!!!',
+    image: '/assets/mezzio_test.jpg'
   }
+
   ];
 
   chunkedUsers = this.chunkArray(this.users, 4);

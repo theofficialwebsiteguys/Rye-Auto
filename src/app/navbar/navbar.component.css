@@ -43,6 +43,10 @@
     padding-left: 10px;
 }
 
+.nav-link{
+    cursor: pointer;
+}
+
 nav {
     padding-top: 0;
 }
