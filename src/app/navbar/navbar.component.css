@@ -1,17 +1,23 @@
 #logo {
-    height: 100px; /* Adjust height as needed */
+    height: 100px;
+    /* Adjust height as needed */
     position: absolute;
-    bottom: -50px; /* Half of the logo's height to hang off the bottom */
-    left: 10%; /* Center the logo */
-    transform: translateX(-50%); /* Center align the logo horizontally */
-    z-index: 15; /* Higher than the navbar to stay on top of the content below */
+    bottom: -50px;
+    /* Half of the logo's height to hang off the bottom */
+    left: 10%;
+    /* Center the logo */
+    transform: translateX(-50%);
+    /* Center align the logo horizontally */
+    z-index: 15;
+    /* Higher than the navbar to stay on top of the content below */
 }
 
 .logo-container {
-    padding-top: 30px; /* Adjust this value as needed */
+    padding-top: 30px;
+    /* Adjust this value as needed */
 }
 
-.contact-btn{
+.contact-btn {
     margin: 10px;
     background-color: #0200fb;
 }
@@ -20,6 +26,17 @@
     display: flex;
     width: 100%;
     justify-content: end;
+}
+
+@media (max-width: 991px) {
+    .navbar-expand-lg .navbar-nav {
+        justify-content: initial;
+        height: fit-content;
+    }
+
+    .contact-btn {
+        margin-bottom: 25px;
+    }
 }
 
 .nav-item {
@@ -32,16 +49,20 @@ nav {
 
 nav.navbar {
     position: relative;
-    z-index: 10; /* Ensures navbar stays on top */
+    z-index: 10;
+    /* Ensures navbar stays on top */
 }
 
 @media (max-width: 991px) {
     #logo {
-        bottom: -25px; /* Adjust for smaller screens */
-        height: 50px; /* Smaller logo on smaller screens */
+        bottom: -25px;
+        /* Adjust for smaller screens */
+        height: 50px;
+        /* Smaller logo on smaller screens */
     }
 
     .logo-container {
-        padding-top: 30px; /* Adjust this value as needed */
+        padding-top: 30px;
+        /* Adjust this value as needed */
     }
 }

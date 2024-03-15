@@ -1,64 +1,64 @@
 {
-  "hash": "cdbf4a15",
-  "configHash": "0bd80a5f",
-  "lockfileHash": "c0e564dc",
-  "browserHash": "3cc48125",
+  "hash": "30fe0fe0",
+  "configHash": "35da14f0",
+  "lockfileHash": "228c00af",
+  "browserHash": "90d908cd",
   "optimized": {
     "@angular/common": {
       "src": "../../../../../node_modules/@angular/common/fesm2022/common.mjs",
       "file": "@angular_common.js",
-      "fileHash": "945c7f03",
+      "fileHash": "4d1bef3c",
       "needsInterop": false
     },
     "@angular/core": {
       "src": "../../../../../node_modules/@angular/core/fesm2022/core.mjs",
       "file": "@angular_core.js",
-      "fileHash": "834c6c42",
+      "fileHash": "3f04a6cb",
       "needsInterop": false
     },
     "@angular/platform-browser": {
       "src": "../../../../../node_modules/@angular/platform-browser/fesm2022/platform-browser.mjs",
       "file": "@angular_platform-browser.js",
-      "fileHash": "637e1799",
+      "fileHash": "d6e5ace5",
       "needsInterop": false
     },
     "@angular/router": {
       "src": "../../../../../node_modules/@angular/router/fesm2022/router.mjs",
       "file": "@angular_router.js",
-      "fileHash": "3db69bf3",
+      "fileHash": "7e636b22",
       "needsInterop": false
     },
     "@ng-bootstrap/ng-bootstrap": {
       "src": "../../../../../node_modules/@ng-bootstrap/ng-bootstrap/fesm2022/ng-bootstrap.mjs",
       "file": "@ng-bootstrap_ng-bootstrap.js",
-      "fileHash": "75b7280f",
+      "fileHash": "b1bf5c29",
       "needsInterop": false
     },
     "owl.carousel": {
       "src": "../../../../../node_modules/owl.carousel/dist/owl.carousel.js",
       "file": "owl__carousel.js",
-      "fileHash": "79b47959",
+      "fileHash": "a6aa7df9",
       "needsInterop": true
     },
     "@angular/forms": {
       "src": "../../../../../node_modules/@angular/forms/fesm2022/forms.mjs",
       "file": "@angular_forms.js",
-      "fileHash": "c3e0718e",
+      "fileHash": "41e3d6d7",
       "needsInterop": false
     }
   },
   "chunks": {
-    "chunk-PKROL754": {
-      "file": "chunk-PKROL754.js"
+    "chunk-EGT6VZ5R": {
+      "file": "chunk-EGT6VZ5R.js"
     },
-    "chunk-5RYM375R": {
-      "file": "chunk-5RYM375R.js"
+    "chunk-5IFVO6YY": {
+      "file": "chunk-5IFVO6YY.js"
     },
-    "chunk-XXZCW4MP": {
-      "file": "chunk-XXZCW4MP.js"
+    "chunk-YF7HP5AF": {
+      "file": "chunk-YF7HP5AF.js"
     },
-    "chunk-SFASAAZA": {
-      "file": "chunk-SFASAAZA.js"
+    "chunk-GSATQSWS": {
+      "file": "chunk-GSATQSWS.js"
     }
   }
 }
