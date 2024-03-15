@@ -1,0 +1,42 @@
+.card {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-evenly;
+}
+
+.col-md-4 {
+    width: 50%
+}
+
+.mb-5 {
+    margin-bottom: 3rem !important;
+    text-align: -webkit-center;
+}
+
+h1#heading {
+    font-family: system-ui;
+    text-align-last: center;
+    padding-top: 25px;
+    color: rgb(255, 255, 255);
+    width: 50%;
+    padding-top: 25px;
+    border-radius: 25px;
+    display: flex;
+    justify-content: center;
+    margin: auto;
+}
+
+#background {
+    width: 100%;
+    background-image: url('../../assets/AVIF/background.avif');
+    background-repeat: no-repeat;
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position: center;
+    padding: 100px;
+}
+
+.trans-background {
+    background-color: rgb(44, 46, 44, .8);
+    border-radius: 25px;
+}
