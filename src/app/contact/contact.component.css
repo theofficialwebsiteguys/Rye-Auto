@@ -18,7 +18,6 @@
     line-height: 52px;
     text-align: center;
     color: #FFFFFF;
-    width: 986px;
 }
 
 .btn {
@@ -34,7 +33,13 @@
 
 @media (max-width: 1300px) {
     .btn {
-        font-size: small;
+        font-size: large;
         width: fit-content;
+    }
+}
+
+@media (max-width: 425px) {
+    #text{
+        font-size: 30px;
     }
 }
