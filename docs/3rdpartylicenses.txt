@@ -354,8 +354,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-<<<<<<< HEAD
-=======
 Package: bootstrap-icons
 License: "MIT"
 
@@ -552,4 +550,3 @@ Awesome, nor vice versa. **Please do not use brand logos for any purpose except
 to represent the company, product, or service to which they refer.**
 
 --------------------------------------------------------------------------------
->>>>>>> 646cfefaa0c984968624bdb05fe0e71348a04f12
