@@ -2026,6 +2026,7 @@ var asapScheduler = new AsapScheduler(AsapAction);
 
 // node_modules/rxjs/dist/esm5/internal/scheduler/async.js
 var asyncScheduler = new AsyncScheduler(AsyncAction);
+var async = asyncScheduler;
 
 // node_modules/rxjs/dist/esm5/internal/scheduler/QueueAction.js
 var QueueAction = function(_super) {
@@ -2274,6 +2275,9 @@ function popResultSelector(args) {
 }
 function popScheduler(args) {
   return isScheduler(last(args)) ? args.pop() : void 0;
+}
+function popNumber(args, defaultValue) {
+  return typeof last(args) === "number" ? args.pop() : defaultValue;
 }
 
 // node_modules/rxjs/dist/esm5/internal/util/isArrayLike.js
@@ -2793,6 +2797,11 @@ var SequenceError = createErrorClass(function(_super) {
   };
 });
 
+// node_modules/rxjs/dist/esm5/internal/util/isDate.js
+function isValidDate(value) {
+  return value instanceof Date && !isNaN(value);
+}
+
 // node_modules/rxjs/dist/esm5/internal/operators/timeout.js
 var TimeoutError = createErrorClass(function(_super) {
   return function TimeoutErrorImpl(info) {
@@ -3030,11 +3039,162 @@ function defer(observableFactory) {
   });
 }
 
+// node_modules/rxjs/dist/esm5/internal/observable/forkJoin.js
+function forkJoin() {
+  var args = [];
+  for (var _i = 0; _i < arguments.length; _i++) {
+    args[_i] = arguments[_i];
+  }
+  var resultSelector = popResultSelector(args);
+  var _a = argsArgArrayOrObject(args), sources = _a.args, keys = _a.keys;
+  var result = new Observable(function(subscriber) {
+    var length = sources.length;
+    if (!length) {
+      subscriber.complete();
+      return;
+    }
+    var values = new Array(length);
+    var remainingCompletions = length;
+    var remainingEmissions = length;
+    var _loop_1 = function(sourceIndex2) {
+      var hasValue = false;
+      innerFrom(sources[sourceIndex2]).subscribe(createOperatorSubscriber(subscriber, function(value) {
+        if (!hasValue) {
+          hasValue = true;
+          remainingEmissions--;
+        }
+        values[sourceIndex2] = value;
+      }, function() {
+        return remainingCompletions--;
+      }, void 0, function() {
+        if (!remainingCompletions || !hasValue) {
+          if (!remainingEmissions) {
+            subscriber.next(keys ? createObject(keys, values) : values);
+          }
+          subscriber.complete();
+        }
+      }));
+    };
+    for (var sourceIndex = 0; sourceIndex < length; sourceIndex++) {
+      _loop_1(sourceIndex);
+    }
+  });
+  return resultSelector ? result.pipe(mapOneOrManyArgs(resultSelector)) : result;
+}
+
+// node_modules/rxjs/dist/esm5/internal/observable/fromEvent.js
+var nodeEventEmitterMethods = ["addListener", "removeListener"];
+var eventTargetMethods = ["addEventListener", "removeEventListener"];
+var jqueryMethods = ["on", "off"];
+function fromEvent(target, eventName, options, resultSelector) {
+  if (isFunction(options)) {
+    resultSelector = options;
+    options = void 0;
+  }
+  if (resultSelector) {
+    return fromEvent(target, eventName, options).pipe(mapOneOrManyArgs(resultSelector));
+  }
+  var _a = __read(isEventTarget(target) ? eventTargetMethods.map(function(methodName) {
+    return function(handler) {
+      return target[methodName](eventName, handler, options);
+    };
+  }) : isNodeStyleEventEmitter(target) ? nodeEventEmitterMethods.map(toCommonHandlerRegistry(target, eventName)) : isJQueryStyleEventEmitter(target) ? jqueryMethods.map(toCommonHandlerRegistry(target, eventName)) : [], 2), add = _a[0], remove2 = _a[1];
+  if (!add) {
+    if (isArrayLike(target)) {
+      return mergeMap(function(subTarget) {
+        return fromEvent(subTarget, eventName, options);
+      })(innerFrom(target));
+    }
+  }
+  if (!add) {
+    throw new TypeError("Invalid event target");
+  }
+  return new Observable(function(subscriber) {
+    var handler = function() {
+      var args = [];
+      for (var _i = 0; _i < arguments.length; _i++) {
+        args[_i] = arguments[_i];
+      }
+      return subscriber.next(1 < args.length ? args : args[0]);
+    };
+    add(handler);
+    return function() {
+      return remove2(handler);
+    };
+  });
+}
+function toCommonHandlerRegistry(target, eventName) {
+  return function(methodName) {
+    return function(handler) {
+      return target[methodName](eventName, handler);
+    };
+  };
+}
+function isNodeStyleEventEmitter(target) {
+  return isFunction(target.addListener) && isFunction(target.removeListener);
+}
+function isJQueryStyleEventEmitter(target) {
+  return isFunction(target.on) && isFunction(target.off);
+}
+function isEventTarget(target) {
+  return isFunction(target.addEventListener) && isFunction(target.removeEventListener);
+}
+
+// node_modules/rxjs/dist/esm5/internal/observable/timer.js
+function timer(dueTime, intervalOrScheduler, scheduler) {
+  if (dueTime === void 0) {
+    dueTime = 0;
+  }
+  if (scheduler === void 0) {
+    scheduler = async;
+  }
+  var intervalDuration = -1;
+  if (intervalOrScheduler != null) {
+    if (isScheduler(intervalOrScheduler)) {
+      scheduler = intervalOrScheduler;
+    } else {
+      intervalDuration = intervalOrScheduler;
+    }
+  }
+  return new Observable(function(subscriber) {
+    var due = isValidDate(dueTime) ? +dueTime - scheduler.now() : dueTime;
+    if (due < 0) {
+      due = 0;
+    }
+    var n = 0;
+    return scheduler.schedule(function() {
+      if (!subscriber.closed) {
+        subscriber.next(n++);
+        if (0 <= intervalDuration) {
+          this.schedule(void 0, intervalDuration);
+        } else {
+          subscriber.complete();
+        }
+      }
+    }, due);
+  });
+}
+
+// node_modules/rxjs/dist/esm5/internal/observable/merge.js
+function merge() {
+  var args = [];
+  for (var _i = 0; _i < arguments.length; _i++) {
+    args[_i] = arguments[_i];
+  }
+  var scheduler = popScheduler(args);
+  var concurrent = popNumber(args, Infinity);
+  var sources = args;
+  return !sources.length ? EMPTY : sources.length === 1 ? innerFrom(sources[0]) : mergeAll(concurrent)(from(sources, scheduler));
+}
+
 // node_modules/rxjs/dist/esm5/internal/observable/never.js
 var NEVER = new Observable(noop);
 
 // node_modules/rxjs/dist/esm5/internal/util/argsOrArgArray.js
 var isArray3 = Array.isArray;
+function argsOrArgArray(args) {
+  return args.length === 1 && isArray3(args[0]) ? args[0] : args;
+}
 
 // node_modules/rxjs/dist/esm5/internal/operators/filter.js
 function filter(predicate, thisArg) {
@@ -3044,6 +3204,83 @@ function filter(predicate, thisArg) {
       return predicate.call(thisArg, value, index++) && subscriber.next(value);
     }));
   });
+}
+
+// node_modules/rxjs/dist/esm5/internal/observable/race.js
+function race() {
+  var sources = [];
+  for (var _i = 0; _i < arguments.length; _i++) {
+    sources[_i] = arguments[_i];
+  }
+  sources = argsOrArgArray(sources);
+  return sources.length === 1 ? innerFrom(sources[0]) : new Observable(raceInit(sources));
+}
+function raceInit(sources) {
+  return function(subscriber) {
+    var subscriptions = [];
+    var _loop_1 = function(i2) {
+      subscriptions.push(innerFrom(sources[i2]).subscribe(createOperatorSubscriber(subscriber, function(value) {
+        if (subscriptions) {
+          for (var s = 0; s < subscriptions.length; s++) {
+            s !== i2 && subscriptions[s].unsubscribe();
+          }
+          subscriptions = null;
+        }
+        subscriber.next(value);
+      })));
+    };
+    for (var i = 0; subscriptions && !subscriber.closed && i < sources.length; i++) {
+      _loop_1(i);
+    }
+  };
+}
+
+// node_modules/rxjs/dist/esm5/internal/observable/zip.js
+function zip() {
+  var args = [];
+  for (var _i = 0; _i < arguments.length; _i++) {
+    args[_i] = arguments[_i];
+  }
+  var resultSelector = popResultSelector(args);
+  var sources = argsOrArgArray(args);
+  return sources.length ? new Observable(function(subscriber) {
+    var buffers = sources.map(function() {
+      return [];
+    });
+    var completed = sources.map(function() {
+      return false;
+    });
+    subscriber.add(function() {
+      buffers = completed = null;
+    });
+    var _loop_1 = function(sourceIndex2) {
+      innerFrom(sources[sourceIndex2]).subscribe(createOperatorSubscriber(subscriber, function(value) {
+        buffers[sourceIndex2].push(value);
+        if (buffers.every(function(buffer2) {
+          return buffer2.length;
+        })) {
+          var result = buffers.map(function(buffer2) {
+            return buffer2.shift();
+          });
+          subscriber.next(resultSelector ? resultSelector.apply(void 0, __spreadArray([], __read(result))) : result);
+          if (buffers.some(function(buffer2, i) {
+            return !buffer2.length && completed[i];
+          })) {
+            subscriber.complete();
+          }
+        }
+      }, function() {
+        completed[sourceIndex2] = true;
+        !buffers[sourceIndex2].length && subscriber.complete();
+      }));
+    };
+    for (var sourceIndex = 0; !subscriber.closed && sourceIndex < sources.length; sourceIndex++) {
+      _loop_1(sourceIndex);
+    }
+    return function() {
+      buffers = completed = null;
+    };
+  }) : EMPTY;
 }
 
 // node_modules/rxjs/dist/esm5/internal/operators/catchError.js
@@ -3125,11 +3362,64 @@ function take(count2) {
   });
 }
 
+// node_modules/rxjs/dist/esm5/internal/operators/ignoreElements.js
+function ignoreElements() {
+  return operate(function(source, subscriber) {
+    source.subscribe(createOperatorSubscriber(subscriber, noop));
+  });
+}
+
 // node_modules/rxjs/dist/esm5/internal/operators/mapTo.js
 function mapTo(value) {
   return map(function() {
     return value;
   });
+}
+
+// node_modules/rxjs/dist/esm5/internal/operators/delayWhen.js
+function delayWhen(delayDurationSelector, subscriptionDelay) {
+  if (subscriptionDelay) {
+    return function(source) {
+      return concat(subscriptionDelay.pipe(take(1), ignoreElements()), source.pipe(delayWhen(delayDurationSelector)));
+    };
+  }
+  return mergeMap(function(value, index) {
+    return innerFrom(delayDurationSelector(value, index)).pipe(take(1), mapTo(value));
+  });
+}
+
+// node_modules/rxjs/dist/esm5/internal/operators/delay.js
+function delay(due, scheduler) {
+  if (scheduler === void 0) {
+    scheduler = asyncScheduler;
+  }
+  var duration = timer(due, scheduler);
+  return delayWhen(function() {
+    return duration;
+  });
+}
+
+// node_modules/rxjs/dist/esm5/internal/operators/distinctUntilChanged.js
+function distinctUntilChanged(comparator, keySelector) {
+  if (keySelector === void 0) {
+    keySelector = identity;
+  }
+  comparator = comparator !== null && comparator !== void 0 ? comparator : defaultCompare;
+  return operate(function(source, subscriber) {
+    var previousKey;
+    var first2 = true;
+    source.subscribe(createOperatorSubscriber(subscriber, function(value) {
+      var currentKey = keySelector(value);
+      if (first2 || !comparator(previousKey, currentKey)) {
+        first2 = false;
+        previousKey = currentKey;
+        subscriber.next(value);
+      }
+    }));
+  });
+}
+function defaultCompare(a, b) {
+  return a === b;
 }
 
 // node_modules/rxjs/dist/esm5/internal/operators/throwIfEmpty.js
@@ -3149,6 +3439,17 @@ function throwIfEmpty(errorFactory) {
 }
 function defaultErrorFactory() {
   return new EmptyError();
+}
+
+// node_modules/rxjs/dist/esm5/internal/operators/endWith.js
+function endWith() {
+  var values = [];
+  for (var _i = 0; _i < arguments.length; _i++) {
+    values[_i] = arguments[_i];
+  }
+  return function(source) {
+    return concat(source, of.apply(void 0, __spreadArray([], __read(values))));
+  };
 }
 
 // node_modules/rxjs/dist/esm5/internal/operators/finalize.js
@@ -3223,6 +3524,13 @@ function last2(predicate, defaultValue) {
 // node_modules/rxjs/dist/esm5/internal/operators/scan.js
 function scan(accumulator, seed) {
   return operate(scanInternals(accumulator, seed, arguments.length >= 2, true));
+}
+
+// node_modules/rxjs/dist/esm5/internal/operators/skip.js
+function skip(count2) {
+  return filter(function(_, index) {
+    return count2 <= index;
+  });
 }
 
 // node_modules/rxjs/dist/esm5/internal/operators/startWith.js
@@ -3302,6 +3610,41 @@ function tap(observerOrNext, error, complete) {
       (_b = tapObserver.finalize) === null || _b === void 0 ? void 0 : _b.call(tapObserver);
     }));
   }) : identity;
+}
+
+// node_modules/rxjs/dist/esm5/internal/operators/withLatestFrom.js
+function withLatestFrom() {
+  var inputs = [];
+  for (var _i = 0; _i < arguments.length; _i++) {
+    inputs[_i] = arguments[_i];
+  }
+  var project = popResultSelector(inputs);
+  return operate(function(source, subscriber) {
+    var len = inputs.length;
+    var otherValues = new Array(len);
+    var hasValue = inputs.map(function() {
+      return false;
+    });
+    var ready = false;
+    var _loop_1 = function(i2) {
+      innerFrom(inputs[i2]).subscribe(createOperatorSubscriber(subscriber, function(value) {
+        otherValues[i2] = value;
+        if (!ready && !hasValue[i2]) {
+          hasValue[i2] = true;
+          (ready = hasValue.every(identity)) && (hasValue = null);
+        }
+      }, noop));
+    };
+    for (var i = 0; i < len; i++) {
+      _loop_1(i);
+    }
+    source.subscribe(createOperatorSubscriber(subscriber, function(value) {
+      if (ready) {
+        var values = __spreadArray([value], __read(otherValues));
+        subscriber.next(project ? project.apply(void 0, __spreadArray([], __read(values))) : values);
+      }
+    }));
+  });
 }
 
 // node_modules/@angular/core/fesm2022/core.mjs
@@ -11381,7 +11724,16 @@ var NOT_FOUND_CHECK_ONLY_ELEMENT_INJECTOR = {};
 function isSignal(value) {
   return typeof value === "function" && value[SIGNAL] !== void 0;
 }
+var markedFeatures = /* @__PURE__ */ new Set();
+function performanceMarkFeature(feature) {
+  if (markedFeatures.has(feature)) {
+    return;
+  }
+  markedFeatures.add(feature);
+  performance?.mark?.("mark_feature_usage", { detail: { feature } });
+}
 function computed(computation, options) {
+  performanceMarkFeature("NgSignals");
   const getter = createComputed(computation);
   if (options?.equal) {
     getter[SIGNAL].equal = options.equal;
@@ -11396,6 +11748,7 @@ function ɵunwrapWritableSignal(value) {
   return null;
 }
 function signal(initialValue, options) {
+  performanceMarkFeature("NgSignals");
   const signalFn = createSignal(initialValue);
   const node = signalFn[SIGNAL];
   if (options?.equal) {
@@ -12508,6 +12861,7 @@ var EffectHandle = class {
   }
 };
 function effect(effectFn, options) {
+  performanceMarkFeature("NgSignals");
   ngDevMode && assertNotInReactiveContext(effect, "Call `effect` outside of a reactive context. For example, schedule the effect inside the component constructor.");
   !options?.injector && assertInInjectionContext(effect);
   const injector = options?.injector ?? inject(Injector);
@@ -12520,14 +12874,6 @@ function effect(effectFn, options) {
     (cdr._lView[EFFECTS_TO_SCHEDULE] ??= []).push(handle.watcher.notify);
   }
   return handle;
-}
-var markedFeatures = /* @__PURE__ */ new Set();
-function performanceMarkFeature(feature) {
-  if (markedFeatures.has(feature)) {
-    return;
-  }
-  markedFeatures.add(feature);
-  performance?.mark?.("mark_feature_usage", { detail: { feature } });
 }
 function noop2(...args) {
 }
@@ -12840,7 +13186,7 @@ var NOOP_AFTER_RENDER_REF = {
 };
 function internalAfterNextRender(callback, options) {
   const injector = options?.injector ?? inject(Injector);
-  if (!isPlatformBrowser(injector))
+  if (!options?.runOnServer && !isPlatformBrowser(injector))
     return;
   const afterRenderEventManager = injector.get(AfterRenderEventManager);
   afterRenderEventManager.internalCallbacks.push(callback);
@@ -12948,15 +13294,18 @@ var _AfterRenderEventManager = class _AfterRenderEventManager {
     this.internalCallbacks = [];
   }
   /**
-   * Executes callbacks. Returns `true` if any callbacks executed.
+   * Executes internal and user-provided callbacks.
    */
   execute() {
+    this.executeInternalCallbacks();
+    this.handler?.execute();
+  }
+  executeInternalCallbacks() {
     const callbacks = [...this.internalCallbacks];
     this.internalCallbacks.length = 0;
     for (const callback of callbacks) {
       callback();
     }
-    this.handler?.execute();
   }
   ngOnDestroy() {
     this.handler?.destroy();
@@ -13516,7 +13865,7 @@ function createRootComponent(componentView, rootComponentDef, rootDirectives, ho
 }
 function setRootNodeAttributes(hostRenderer, componentDef, hostRNode, rootSelectorOrNode) {
   if (rootSelectorOrNode) {
-    setUpAttributes(hostRenderer, hostRNode, ["ng-version", "17.2.2"]);
+    setUpAttributes(hostRenderer, hostRNode, ["ng-version", "17.2.3"]);
   } else {
     const { attrs, classes } = extractAttrsAndClassesFromSelector(componentDef.selectors[0]);
     if (attrs) {
@@ -14676,42 +15025,6 @@ function ɵɵInputTransformsFeature(definition) {
   }
   definition.inputTransforms = inputTransforms;
 }
-var ASYNC_COMPONENT_METADATA_FN = "__ngAsyncComponentMetadataFn__";
-function getAsyncClassMetadataFn(type) {
-  const componentClass = type;
-  return componentClass[ASYNC_COMPONENT_METADATA_FN] ?? null;
-}
-function setClassMetadataAsync(type, dependencyLoaderFn, metadataSetterFn) {
-  const componentClass = type;
-  componentClass[ASYNC_COMPONENT_METADATA_FN] = () => Promise.all(dependencyLoaderFn()).then((dependencies) => {
-    metadataSetterFn(...dependencies);
-    componentClass[ASYNC_COMPONENT_METADATA_FN] = null;
-    return dependencies;
-  });
-  return componentClass[ASYNC_COMPONENT_METADATA_FN];
-}
-function setClassMetadata(type, decorators, ctorParameters, propDecorators) {
-  return noSideEffects(() => {
-    const clazz = type;
-    if (decorators !== null) {
-      if (clazz.hasOwnProperty("decorators") && clazz.decorators !== void 0) {
-        clazz.decorators.push(...decorators);
-      } else {
-        clazz.decorators = decorators;
-      }
-    }
-    if (ctorParameters !== null) {
-      clazz.ctorParameters = ctorParameters;
-    }
-    if (propDecorators !== null) {
-      if (clazz.hasOwnProperty("propDecorators") && clazz.propDecorators !== void 0) {
-        clazz.propDecorators = __spreadValues(__spreadValues({}, clazz.propDecorators), propDecorators);
-      } else {
-        clazz.propDecorators = propDecorators;
-      }
-    }
-  });
-}
 var NgModuleRef$1 = class {
 };
 var NgModuleFactory$1 = class {
@@ -14793,6 +15106,71 @@ var EnvironmentNgModuleRefAdapter = class extends NgModuleRef$1 {
 function createEnvironmentInjector(providers, parent, debugName = null) {
   const adapter = new EnvironmentNgModuleRefAdapter({ providers, parent, debugName, runEnvironmentInitializers: true });
   return adapter.injector;
+}
+var _CachedInjectorService = class _CachedInjectorService {
+  constructor() {
+    this.cachedInjectors = /* @__PURE__ */ new Map();
+  }
+  getOrCreateInjector(key, parentInjector, providers, debugName) {
+    if (!this.cachedInjectors.has(key)) {
+      const injector = providers.length > 0 ? createEnvironmentInjector(providers, parentInjector, debugName) : null;
+      this.cachedInjectors.set(key, injector);
+    }
+    return this.cachedInjectors.get(key);
+  }
+  ngOnDestroy() {
+    try {
+      for (const injector of this.cachedInjectors.values()) {
+        if (injector !== null) {
+          injector.destroy();
+        }
+      }
+    } finally {
+      this.cachedInjectors.clear();
+    }
+  }
+};
+_CachedInjectorService.ɵprov = ɵɵdefineInjectable({
+  token: _CachedInjectorService,
+  providedIn: "environment",
+  factory: () => new _CachedInjectorService()
+});
+var CachedInjectorService = _CachedInjectorService;
+var ASYNC_COMPONENT_METADATA_FN = "__ngAsyncComponentMetadataFn__";
+function getAsyncClassMetadataFn(type) {
+  const componentClass = type;
+  return componentClass[ASYNC_COMPONENT_METADATA_FN] ?? null;
+}
+function setClassMetadataAsync(type, dependencyLoaderFn, metadataSetterFn) {
+  const componentClass = type;
+  componentClass[ASYNC_COMPONENT_METADATA_FN] = () => Promise.all(dependencyLoaderFn()).then((dependencies) => {
+    metadataSetterFn(...dependencies);
+    componentClass[ASYNC_COMPONENT_METADATA_FN] = null;
+    return dependencies;
+  });
+  return componentClass[ASYNC_COMPONENT_METADATA_FN];
+}
+function setClassMetadata(type, decorators, ctorParameters, propDecorators) {
+  return noSideEffects(() => {
+    const clazz = type;
+    if (decorators !== null) {
+      if (clazz.hasOwnProperty("decorators") && clazz.decorators !== void 0) {
+        clazz.decorators.push(...decorators);
+      } else {
+        clazz.decorators = decorators;
+      }
+    }
+    if (ctorParameters !== null) {
+      clazz.ctorParameters = ctorParameters;
+    }
+    if (propDecorators !== null) {
+      if (clazz.hasOwnProperty("propDecorators") && clazz.propDecorators !== void 0) {
+        clazz.propDecorators = __spreadValues(__spreadValues({}, clazz.propDecorators), propDecorators);
+      } else {
+        clazz.propDecorators = propDecorators;
+      }
+    }
+  });
 }
 var _PendingTasks = class _PendingTasks {
   constructor() {
@@ -15475,7 +15853,8 @@ function ɵɵdefer(index, primaryTmplIndex, dependencyResolverFn, loadingTmplInd
       loadingBlockConfig: null,
       dependencyResolverFn: dependencyResolverFn ?? null,
       loadingState: DeferDependenciesLoadingState.NOT_STARTED,
-      loadingPromise: null
+      loadingPromise: null,
+      providers: null
     };
     enableTimerScheduling?.(tView, tDetails, placeholderConfigIndex, loadingConfigIndex);
     setTDeferBlockDetails(tView, adjustedIndex, tDetails);
@@ -15723,8 +16102,18 @@ function applyDeferBlockState(newState, lDetails, lContainer, tNode, hostLView) 
     const activeBlockTNode = getTNode(hostTView, adjustedIndex);
     const viewIndex = 0;
     removeLViewFromLContainer(lContainer, viewIndex);
+    let injector;
+    if (newState === DeferBlockState.Complete) {
+      const tDetails = getTDeferBlockDetails(hostTView, tNode);
+      const providers = tDetails.providers;
+      if (providers && providers.length > 0) {
+        const parentInjector = hostLView[INJECTOR$1];
+        const parentEnvInjector = parentInjector.get(EnvironmentInjector);
+        injector = parentEnvInjector.get(CachedInjectorService).getOrCreateInjector(tDetails, parentEnvInjector, providers, ngDevMode ? "DeferBlock Injector" : "");
+      }
+    }
     const dehydratedView = findMatchingDehydratedView(lContainer, activeBlockTNode.tView.ssrId);
-    const embeddedLView = createAndRenderEmbeddedLView(hostLView, activeBlockTNode, null, { dehydratedView });
+    const embeddedLView = createAndRenderEmbeddedLView(hostLView, activeBlockTNode, null, { dehydratedView, injector });
     addLViewToLContainer(lContainer, embeddedLView, viewIndex, shouldAddViewToDom(activeBlockTNode, dehydratedView));
     markViewDirty(embeddedLView);
   }
@@ -15839,6 +16228,9 @@ function triggerResourceLoading(tDetails, lView, tNode) {
       const primaryBlockTView = primaryBlockTNode.tView;
       if (directiveDefs.length > 0) {
         primaryBlockTView.directiveRegistry = addDepsToRegistry(primaryBlockTView.directiveRegistry, directiveDefs);
+        const directiveTypes = directiveDefs.map((def) => def.type);
+        const providers = internalImportProvidersFrom(false, ...directiveTypes);
+        tDetails.providers = providers;
       }
       if (pipeDefs.length > 0) {
         primaryBlockTView.pipeRegistry = addDepsToRegistry(primaryBlockTView.pipeRegistry, pipeDefs);
@@ -20839,7 +21231,7 @@ var Version = class {
     this.patch = parts.slice(2).join(".");
   }
 };
-var VERSION = new Version("17.2.2");
+var VERSION = new Version("17.2.3");
 var _Console = class _Console {
   log(message) {
     console.log(message);
@@ -21763,9 +22155,10 @@ var _ApplicationRef = class _ApplicationRef {
   }
   detectChangesInAttachedViews() {
     let runs = 0;
-    do {
+    const afterRenderEffectManager = this.afterRenderEffectManager;
+    while (true) {
       if (runs === MAXIMUM_REFRESH_RERUNS) {
-        throw new RuntimeError(103, ngDevMode && "Changes in afterRender or afterNextRender hooks caused infinite change detection while refresh views.");
+        throw new RuntimeError(103, ngDevMode && "Infinite change detection while refreshing application views. Ensure afterRender or queueStateUpdate hooks are not continuously causing updates.");
       }
       const isFirstPass = runs === 0;
       for (let { _lView, notifyErrorHandler } of this._views) {
@@ -21774,9 +22167,16 @@ var _ApplicationRef = class _ApplicationRef {
         }
         this.detectChangesInView(_lView, notifyErrorHandler, isFirstPass);
       }
-      this.afterRenderEffectManager.execute();
       runs++;
-    } while (this._views.some(({ _lView }) => shouldRecheckView(_lView)));
+      afterRenderEffectManager.executeInternalCallbacks();
+      if (this._views.some(({ _lView }) => shouldRecheckView(_lView))) {
+        continue;
+      }
+      afterRenderEffectManager.execute();
+      if (!this._views.some(({ _lView }) => shouldRecheckView(_lView))) {
+        break;
+      }
+    }
   }
   detectChangesInView(lView, notifyErrorHandler, isFirstPass) {
     let mode;
@@ -22954,6 +23354,22 @@ var WATCH_NODE2 = (() => {
 })();
 function setAlternateWeakRefImpl(impl) {
 }
+function queueStateUpdate(callback, options) {
+  !options && assertInInjectionContext(queueStateUpdate);
+  const injector = options?.injector ?? inject(Injector);
+  const appRef = injector.get(ApplicationRef);
+  let executed = false;
+  const runCallbackOnce = () => {
+    if (executed || appRef.destroyed)
+      return;
+    executed = true;
+    callback();
+  };
+  internalAfterNextRender(runCallbackOnce, { injector, runOnServer: true });
+  queueMicrotask(() => {
+    runCallbackOnce();
+  });
+}
 var SCAN_DELAY = 200;
 var OVERSIZED_IMAGE_TOLERANCE = 1200;
 var _ImagePerformanceWarning = class _ImagePerformanceWarning {
@@ -23727,21 +24143,33 @@ export {
   mergeAll,
   concat,
   defer,
+  forkJoin,
+  fromEvent,
+  timer,
+  merge,
+  NEVER,
   filter,
+  race,
+  zip,
   catchError,
   concatMap,
   defaultIfEmpty,
   take,
   mapTo,
+  delay,
+  distinctUntilChanged,
+  endWith,
   finalize,
   first,
   takeLast,
   last2 as last,
   scan,
+  skip,
   startWith,
   switchMap,
   takeUntil,
   tap,
+  withLatestFrom,
   XSS_SECURITY_URL,
   RuntimeError,
   formatRuntimeError,
@@ -23881,6 +24309,7 @@ export {
   Sanitizer,
   NOT_FOUND_CHECK_ONLY_ELEMENT_INJECTOR,
   isSignal,
+  performanceMarkFeature,
   computed,
   ɵunwrapWritableSignal,
   signal,
@@ -23897,7 +24326,6 @@ export {
   assertNotInReactiveContext,
   EffectScheduler,
   effect,
-  performanceMarkFeature,
   NgZone,
   NoopNgZone,
   AfterRenderPhase,
@@ -23933,9 +24361,6 @@ export {
   ɵɵCopyDefinitionFeature,
   ɵɵHostDirectivesFeature,
   ɵɵInputTransformsFeature,
-  getAsyncClassMetadataFn,
-  setClassMetadataAsync,
-  setClassMetadata,
   NgModuleRef$1,
   NgModuleFactory$1,
   createNgModule,
@@ -23943,6 +24368,9 @@ export {
   NgModuleRef,
   NgModuleFactory,
   createEnvironmentInjector,
+  getAsyncClassMetadataFn,
+  setClassMetadataAsync,
+  setClassMetadata,
   PendingTasks,
   ɵɵtemplate,
   DeferBlockState,
@@ -24170,6 +24598,7 @@ export {
   platformCore,
   ApplicationModule,
   setAlternateWeakRefImpl,
+  queueStateUpdate,
   internalCreateApplication,
   provideZonelessChangeDetection,
   getDeferBlocks,
@@ -24193,14 +24622,14 @@ export {
 
 @angular/core/fesm2022/primitives/signals.mjs:
   (**
-   * @license Angular v17.2.2
+   * @license Angular v17.2.3
    * (c) 2010-2022 Google LLC. https://angular.io/
    * License: MIT
    *)
 
 @angular/core/fesm2022/core.mjs:
   (**
-   * @license Angular v17.2.2
+   * @license Angular v17.2.3
    * (c) 2010-2022 Google LLC. https://angular.io/
    * License: MIT
    *)
@@ -24223,4 +24652,4 @@ export {
    * found in the LICENSE file at https://angular.io/license
    *)
 */
-//# sourceMappingURL=chunk-B5LUOZ3Q.js.map
+//# sourceMappingURL=chunk-UDHPEJ5C.js.map
