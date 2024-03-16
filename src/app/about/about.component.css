@@ -1,0 +1,59 @@
+/* hero.component.css */
+.hero-container {
+    position: relative;
+    background-image: url('../../assets/gallery/pic5.jpg');
+    background-size: cover;
+    background-position: center;
+    height: 200px; /* Adjust based on your preference */
+  }
+  
+  .overlay {
+    background: rgba(0, 0, 0, 0.5); /* Dark overlay; adjust opacity as needed */
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+  }
+  
+  .container {
+    z-index: 2;
+  }
+  
+  /* Optional: If you want the title to stand out more */
+  h1 {
+    font-weight: bold;
+  }
+  
+  .featurette-divider {
+    margin: 5rem 0; /* Space out the Bootstrap <hr> more */
+  }
+
+  .featurette{
+    padding: 100px;
+  }
+  
+  /* Thin out the marketing headings */
+  /* rtl:begin:remove */
+  .featurette-heading {
+    letter-spacing: -.05rem;
+  }
+  
+  @media (max-width: 1440px) {
+    .featurette{
+      padding: 50px;
+    }
+  }
+
+  @media (max-width: 1024px) {
+    .featurette{
+      display: block;
+    }
+    
+    .text{
+      width: auto;
+    }
+
+    .image{
+      width: auto;
+      text-align: center;
+    }
+  }

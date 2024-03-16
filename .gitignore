@@ -45,6 +45,8 @@ jspm_packages/
 # Snowpack dependency directory (https://snowpack.dev/)
 web_modules/
 
+.angular/
+
 # TypeScript cache
 *.tsbuildinfo
 
@@ -128,3 +130,7 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# MetaData
+.angular/cache/17.2.1/vite/deps/_metadata.json
+.angular/cache/17.2.1/vite/deps/_metadata.json
