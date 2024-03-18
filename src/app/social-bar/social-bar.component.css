@@ -39,3 +39,12 @@
 .phoneNumber {
     margin-left: 8px;
 }
+
+@media (max-width: 554px) {
+    .emailLink{
+        display: none;
+    }
+    .split{
+        display: none;
+    }
+}

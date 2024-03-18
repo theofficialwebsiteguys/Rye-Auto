@@ -4,9 +4,9 @@
     position: absolute;
     bottom: -50px;
     /* Half of the logo's height to hang off the bottom */
-    left: 10%;
+   
     /* Center the logo */
-    transform: translateX(-50%);
+
     /* Center align the logo horizontally */
     z-index: 15;
     /* Higher than the navbar to stay on top of the content below */
@@ -59,9 +59,9 @@ nav.navbar {
 
 @media (max-width: 991px) {
     #logo {
-        bottom: -25px;
+
         /* Adjust for smaller screens */
-        height: 50px;
+        
         /* Smaller logo on smaller screens */
     }
 
