@@ -55,6 +55,7 @@ h1#heading {
     background-position: center; /* Center the image within the div */
     border-radius: 50%; /* This creates the rounded circle effect */
     background-repeat: no-repeat; /* Prevent the image from repeating */
+    margin: auto;
   }
   
 @media only screen and (max-width: 600px) {

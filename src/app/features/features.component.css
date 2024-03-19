@@ -38,7 +38,9 @@ main {
 
 .image-container,
 .image-container2,
-.image-container3 {}
+.image-container3 {
+
+}
 
 .slider-image,
 .slider-image2,
@@ -56,6 +58,21 @@ main {
   inset: 0;
   width: var(--position);
   filter: grayscale(100%)
+}
+
+.image-before,
+.image-after {
+  content: url('../../assets/patio.jpg');
+}
+
+.image-before2,
+.image-after2 {
+  content: url('../../assets/wall.jpg');
+}
+
+.image-before3,
+.image-after3 {
+  content: url('../../assets/path.jpg');
 }
 
 .slider,
@@ -132,11 +149,11 @@ hr {
 }
 
 @media (max-width: 991px) {
-  main {
+  main{
     display: block;
   }
 
-  .feature-desc {
+  .feature-desc{
     margin-top: 20px;
   }
 
