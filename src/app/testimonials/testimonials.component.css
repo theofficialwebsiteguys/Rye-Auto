@@ -14,6 +14,15 @@
     text-align: -webkit-center;
 }
 
+.carousel-control-prev {
+    left: -25px !important;
+}
+
+.carousel-control-next {
+    /* right: 0; */
+    right: -25px !important;
+}
+
 h1#heading {
     font-family: system-ui;
     text-align: center;
@@ -48,3 +57,20 @@ h1#heading {
     background-repeat: no-repeat; /* Prevent the image from repeating */
   }
   
+@media only screen and (max-width: 600px) {
+    .card {
+        flex-direction: column;
+    }
+
+    .col-md-4 {
+        width: 100%;
+    }
+
+    h1#heading {
+        font-size: 1.5em;
+    }
+
+    #background {
+        padding: 50px;
+    }
+}
