@@ -26,4 +26,27 @@
   .gallery{
     margin: 10%;
   }
-  
+
+  .img7{
+    content: url('../../assets/gallery/pic7.jpg');
+  }
+
+  .img2{
+    content: url('../../assets/gallery/pic2.jpg');
+  }
+
+  .img3{
+    content: url('../../assets/gallery/pic3.jpg');
+  }
+
+  .img4{
+    content: url('../../assets/gallery/pic4.jpg');
+  }
+
+  .img6{
+    content: url('../../assets/gallery/pic6.jpg');
+  }
+
+  .img5{
+    content: url('../../assets/gallery/pic5.jpg');
+  }
