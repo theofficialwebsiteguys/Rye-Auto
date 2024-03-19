@@ -64,3 +64,10 @@
       text-align: center;
     }
   }
+
+@media (max-width: 525px) {
+  .truck-image {
+    width: 300px;
+    height: 500px;
+  }
+}
