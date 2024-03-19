@@ -26,3 +26,18 @@
   .gallery{
     margin: 10%;
   }
+
+  .image {
+    width: 100%; /* Adjust width as needed, 100% makes it responsive */
+    height: 0; /* Initial height, will be overridden */
+    padding-top: 66.66%; /* This creates an aspect ratio of 3:2 */
+    background-size: cover;
+    background-position: center;
+    margin-bottom: 16px; /* Adjust based on your design */
+    border-radius: 0.25rem; /* Adjust for rounded corners */
+    box-shadow: 0 4px 6px rgba(0,0,0,.1); /* Adds a shadow, similar to the shadow-1-strong class */
+    background-repeat: no-repeat;
+  }
+  
+  /* Adjustments for larger screens and specific column sizes can be done through media queries and additional classes similar to your existing structure */
+  

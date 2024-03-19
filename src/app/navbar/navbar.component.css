@@ -1,20 +1,19 @@
 #logo {
-    height: 100px;
-    /* Adjust height as needed */
+    height: 100px; /* Adjust height as needed */
     position: absolute;
-    bottom: -50px;
-    /* Half of the logo's height to hang off the bottom */
-   
-    /* Center the logo */
-
-    /* Center align the logo horizontally */
-    z-index: 15;
-    /* Higher than the navbar to stay on top of the content below */
+    bottom: -50px; /* Half of the logo's height to hang off the bottom */
+    z-index: 15; /* Higher than the navbar to stay on top of the content below */
+    background-image: url('../../assets/Logo/HitchcockHardScapes.avif'); /* Path to your logo image */
+    background-size: contain; /* Ensure the logo fits within the dimensions and is not stretched */
+    background-repeat: no-repeat;
+    background-position: center; /* Center the logo within the element */
 }
+
 
 .logo-container {
     padding-top: 30px;
     /* Adjust this value as needed */
+    position: relative; 
 }
 
 .contact-btn {

@@ -30,6 +30,13 @@
   .featurette{
     padding: 100px;
   }
+
+  .truck-image {
+    width: 500px;
+    height: 500px;
+    background-image: url('../../assets/gallery/trucks.jpg');
+    background-size: 500px 500px;
+  }
   
   /* Thin out the marketing headings */
   /* rtl:begin:remove */
