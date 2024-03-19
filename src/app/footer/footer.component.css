@@ -12,3 +12,7 @@
     font-size: 30px;
     margin: 5px;
 }
+
+.logo{
+    content: url('../../assets/Logo/HitchcockHardScapes.avif');
+}
