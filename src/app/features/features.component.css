@@ -62,17 +62,17 @@ main {
 
 .image-before,
 .image-after {
-  content: url('../../assets/patio.jpg');
+  content: url('../../assets/gallery/1.jpg');
 }
 
 .image-before2,
 .image-after2 {
-  content: url('../../assets/wall.jpg');
+  content: url('../../assets/gallery/2.jpg');
 }
 
 .image-before3,
 .image-after3 {
-  content: url('../../assets/path.jpg');
+  content: url('../../assets/gallery/3.jpg');
 }
 
 .slider,

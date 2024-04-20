@@ -16,8 +16,8 @@
 
 
 .quotes-btn {
-  background-color: #fff507;
-  color: black;
+  background-color: #3b6f53;
+  color: white;
   border: none;
   width: 250px;
 }
@@ -54,17 +54,17 @@
 }
 
 .carousel-item:nth-child(1) {
-  background-image: url('../../assets/gallery/pic1.jpg');
+  background-image: url('../../assets/gallery/2.jpg');
   height: 100%;
 }
 
 .carousel-item:nth-child(2) {
-  background-image: url('../../assets/gallery/pic3.jpg');
+  background-image: url('../../assets/gallery/4.jpg');
   height: 100%;
 }
 
 .carousel-item:nth-child(3) {
-  background-image: url('../../assets/gallery/pic2.jpg');
+  background-image: url('../../assets/gallery/6.jpg');
   height: 100%;
 }
 

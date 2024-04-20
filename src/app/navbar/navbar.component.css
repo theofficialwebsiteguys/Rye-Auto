@@ -1,8 +1,9 @@
 #logo {
-    height: 100px;
+    height: 150px;
+    margin-left: 15px;
     /* Adjust height as needed */
     position: absolute;
-    bottom: -50px;
+    bottom: -100px;
     /* Half of the logo's height to hang off the bottom */
    
     /* Center the logo */
@@ -10,7 +11,7 @@
     /* Center align the logo horizontally */
     z-index: 15;
     /* Higher than the navbar to stay on top of the content below */
-    content: url('../../assets/Logo/HitchcockHardScapes.avif');
+    content: url('../../assets/Logo/logo.jpg');
 }
 
 .logo-container {
@@ -18,9 +19,10 @@
     /* Adjust this value as needed */
 }
 
+
 .contact-btn {
     margin: 10px;
-    background-color: #0200fb;
+    background-color: #3b6f53;
 }
 
 .navbar-expand-lg .navbar-nav {
@@ -77,5 +79,4 @@ nav.navbar {
     flex-basis: 100%;
     flex-grow: 1;
     align-items: center;
-    padding-bottom: 25px;
 }

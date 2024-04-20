@@ -1,7 +1,7 @@
 /* hero.component.css */
 .hero-container {
     position: relative;
-    background-image: url('../../assets/gallery/pic3.jpg');
+    background-image: url('../../assets/gallery/3.jpg');
     background-size: cover;
     background-position: center;
     height: 200px; /* Adjust based on your preference */

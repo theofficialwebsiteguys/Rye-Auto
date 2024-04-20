@@ -1,7 +1,7 @@
 /* hero.component.css */
 .hero-container {
     position: relative;
-    background-image: url('../../assets/gallery/pic5.jpg');
+    background-image: url('../../assets/gallery/14.jpg');
     background-size: cover;
     background-position: center;
     height: 200px; /* Adjust based on your preference */
@@ -32,10 +32,10 @@
   }
 
   .truck-image {
-    width: 500px;
+    width: auto;
     height: 500px;
-    background-image: url('../../assets/gallery/trucks.jpg');
-    background-size: 500px 500px;
+    background-repeat: no-repeat;
+    background-image: url('../../assets/gallery/17.jpg');
   }
   
   /* Thin out the marketing headings */
@@ -43,6 +43,11 @@
   .featurette-heading {
     letter-spacing: -.05rem;
   }
+
+  .text{
+    margin: auto;
+  }
+
   
   @media (max-width: 1440px) {
     .featurette{
