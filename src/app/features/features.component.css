@@ -31,7 +31,7 @@ main {
   position: relative;
   overflow: hidden;
   border-radius: 1rem;
-  --position: 50%;
+  /* --position: 50%; */
   max-width: 600px;
   /* Adjust this value as needed */
 }
@@ -148,6 +148,9 @@ hr {
   width: 75%;
 }
 
+.feature-desc{
+  padding: 5%;
+}
 @media (max-width: 991px) {
   main{
     display: block;
