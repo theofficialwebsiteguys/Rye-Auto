@@ -31,7 +31,7 @@ main {
   position: relative;
   overflow: hidden;
   border-radius: 1rem;
-  /* --position: 50%; */
+  --position: 50%;
   max-width: 600px;
   /* Adjust this value as needed */
 }
@@ -60,19 +60,21 @@ main {
   filter: grayscale(100%)
 }
 
-.image-before,
+.image-before{
+  content: url('../../assets/new_pics/sap_before.jpg')
+}
 .image-after {
-  content: url('../../assets/gallery/1.jpg');
+  content: url('../../assets/new_pics/sap_after.jpg')
 }
 
 .image-before2,
 .image-after2 {
-  content: url('../../assets/gallery/2.jpg');
+  content: url('../../assets/new_pics/century_boat.jpg');
 }
 
 .image-before3,
 .image-after3 {
-  content: url('../../assets/gallery/3.jpg');
+  content: url('../../assets/new_pics/mercedes_car.jpg');
 }
 
 .slider,
@@ -150,14 +152,18 @@ hr {
 
 .feature-desc{
   padding: 5%;
+  max-width: 900px;
 }
+
 @media (max-width: 991px) {
   main{
     display: block;
+    margin: 0;
   }
 
   .feature-desc{
     margin-top: 20px;
   }
+
 
 }

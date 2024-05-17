@@ -1,7 +1,7 @@
 /* hero.component.css */
 .hero-container {
   position: relative;
-  background-image: url('../../assets/gallery/10.jpg');
+  background-image: url('../../assets/new_pics/rover.jpg');
   background-size: cover;
   background-position: center;
   height: 200px;
@@ -25,3 +25,13 @@ h1 {
   font-weight: bold;
 }
 
+.text{
+  margin-top: 100px;
+}
+
+
+@media (max-width: 991px) {
+  .title{
+    margin-top: 100px;
+  }
+}

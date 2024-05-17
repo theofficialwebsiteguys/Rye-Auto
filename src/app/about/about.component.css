@@ -1,7 +1,7 @@
 /* hero.component.css */
 .hero-container {
     position: relative;
-    background-image: url('../../assets/gallery/14.jpg');
+    background-image: url('../../assets/new_pics/century_boat_interior.jpg');
     background-size: cover;
     background-position: center;
     height: 200px; /* Adjust based on your preference */
@@ -35,7 +35,7 @@
     width: auto;
     height: 500px;
     background-repeat: no-repeat;
-    background-image: url('../../assets/gallery/17.jpg');
+    background-image: url('../../assets/new_pics/ram_truck.jpg');
   }
   
   /* Thin out the marketing headings */
@@ -72,7 +72,12 @@
 
 @media (max-width: 525px) {
   .truck-image {
-    width: 300px;
-    height: 500px;
+    height: 400px;
+  }
+}
+
+@media (max-width: 991px) {
+  .title{
+    margin-top: 100px;
   }
 }
