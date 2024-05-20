@@ -67,14 +67,16 @@ main {
   content: url('../../assets/new_pics/sap_after.jpg')
 }
 
-.image-before2,
+.image-before2{
+  content: url('../../assets/new_pics/boat_restoration_before.png');
+}
 .image-after2 {
-  content: url('../../assets/new_pics/century_boat.jpg');
+  content: url('../../assets/new_pics/boat_restoration_after.jpg');
 }
 
 .image-before3,
 .image-after3 {
-  content: url('../../assets/new_pics/mercedes_car.jpg');
+  content: url('../../assets/new_pics/authentic/green.jpg');
 }
 
 .slider,
@@ -110,6 +112,9 @@ main {
   pointer-events: none;
 }
 
+.bold{
+  font-weight: bold;
+}
 .slider-button,
 .slider-button2,
 .slider-button3 {
