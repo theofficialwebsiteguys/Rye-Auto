@@ -245,3 +245,57 @@
     margin-top: 7rem;
   }
 }
+
+
+
+.contact-container {
+  display: flex;
+  background-color: #2E2E30;
+  /* #a1a1a1  #1e1e1e*/
+  width: 100%;
+  height: 400px;
+  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: inset 0 1em 1.5em rgba(0, 0, 0, .25), inset 0 0.125em 0.5em rgba(0, 0, 0, .30)
+}
+
+
+#text1 {
+  padding: 15px;
+  font-style: normal;
+  font-weight: 400;
+  font-size: 48px;
+  line-height: 52px;
+  text-align: center;
+  color: #FFFFFF;
+}
+
+#text2 {
+  padding: 15px;
+  font-style: normal;
+  font-weight: 400;
+  font-size: 32px;
+  line-height: 52px;
+  text-align: center;
+  color: #FFFFFF;
+}
+
+
+@media (max-width: 425px) {
+  #text{
+      font-size: 30px;
+  }
+}
+
+
+.consignment ul {
+  list-style-type: none;
+  padding: 0;
+}
+
+.consignment li {
+  font-size: 1.5em;
+  margin: 10px 0;
+  color: #ffffff;
+}
